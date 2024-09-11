@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"sync/atomic"
@@ -9,8 +10,49 @@ import (
 	"github.com/open-oni/batch-agent/version"
 )
 
+// ONILocation is where Open ONI lives on the server, for invoking the
+// management commands
+var ONILocation string
+
+// BatchSource is where batches can be found, necessary for the "load" command
+var BatchSource string
+
+// BABind is the address and port to bind this process
+var BABind string
+
 func main() {
-	var srv = &ssh.Server{Addr: ":2222"}
+	BABind = os.Getenv("BA_BIND")
+	if BABind == "" {
+		slog.Error("BA_BIND must be set")
+		os.Exit(1)
+	}
+
+	var srv = &ssh.Server{Addr: BABind}
+
+	ONILocation = os.Getenv("ONI_LOCATION")
+
+	var info, err = os.Stat(ONILocation)
+	if err == nil {
+		if !info.IsDir() {
+			err = errors.New("not a valid directory")
+		}
+	}
+	if err != nil {
+		slog.Error("Invalid setting for ONI_LOCATION", "error", err)
+		os.Exit(1)
+	}
+
+	BatchSource = os.Getenv("BATCH_SOURCE")
+	info, err = os.Stat(BatchSource)
+	if err == nil {
+		if !info.IsDir() {
+			err = errors.New("not a valid directory")
+		}
+	}
+	if err != nil {
+		slog.Error("Invalid setting for BATCH_SOURCE", "error", err)
+		os.Exit(1)
+	}
 
 	var sessionID atomic.Uint64
 	srv.Handle(func(_s ssh.Session) {
@@ -21,7 +63,7 @@ func main() {
 		slog.Info("Connection closed", "source", s.RemoteAddr(), "command", s.RawCommand(), "user", s.User())
 	})
 
-	slog.Info("starting ssh server", "port", 2222, "version", version.Version)
+	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
 	if err := srv.ListenAndServe(); err != nil {
 		slog.Error("Unable to serve SSH", "error", err)
 		os.Exit(1)
