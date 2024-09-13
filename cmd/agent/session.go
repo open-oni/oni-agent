@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -18,44 +18,63 @@ type session struct {
 	id uint64
 }
 
-func (s session) Printf(msg string, args ...any) (n int, err error) {
-	return fmt.Fprintf(s, msg, args...)
+// Status is a string type the handler's "status" JSON may return
+type Status string
+
+// All possible statuses
+const (
+	StatusError   Status = "error"
+	StatusSuccess Status = "success"
+)
+
+// H is a simple type alias for more easily building JSON responses
+type H map[string]any
+
+func (s session) respond(st Status, data H) {
+	data["status"] = st
+	var b, err = json.Marshal(data)
+	if err != nil {
+		slog.Error("marshaling data", "error", err, "data", data)
+	}
+	slog.Info("marshaling data", "error", err, "data", data)
+	s.Write(b)
 }
 
 func (s session) handle() {
 	var cmds = s.Command()
 	if len(cmds) == 0 {
-		s.Printf("Missing command; terminating session\n")
+		s.respond(StatusError, H{"message": " no command specified"})
 		return
 	}
 
 	var command = cmds[0]
 	switch command {
 	case "version":
-		s.Printf("Batch Agent version %s\n", version.Version)
+		s.respond(StatusSuccess, H{"version": version.Version})
 		return
 
 	case "load":
 		if len(cmds) != 2 {
-			s.Printf("%q requires exactly one batch name; terminating session\n", command)
+			s.respond(StatusError, H{"command": command, "message": "requires exactly one batch name"})
 			return
 		}
 		s.loadBatch(cmds[1])
 
 	case "purge":
 		if len(cmds) != 2 {
-			s.Printf("%q requires exactly one batch name; terminating session\n", command)
+			s.respond(StatusError, H{"command": command, "message": "requires exactly one batch name"})
 			return
 		}
 		s.purgeBatch(cmds[1])
 
 	default:
-		s.Printf("Unknown command %q\n", command)
+		s.respond(StatusError, H{"command": command, "message": "unknown command"})
+		return
 	}
 }
 
 func (s session) loadBatch(name string) {
-	s.Printf("Loading batch %q...\n", name)
+	s.respond(StatusSuccess, H{"message": "starting batch load", "batch": name})
 	var cmd = newManageCommand("load_batch", filepath.Join(BatchSource, name))
 
 	var stdout, stderr bytes.Buffer
@@ -73,7 +92,7 @@ func (s session) loadBatch(name string) {
 }
 
 func (s session) purgeBatch(name string) {
-	s.Printf("Purging batch %q...\n", name)
+	s.respond(StatusSuccess, H{"message": "starting batch purge", "batch": name})
 	var cmd = newManageCommand("purge_batch", name)
 
 	var stdout, stderr bytes.Buffer
