@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/gliderlabs/ssh"
-	"github.com/open-oni/batch-agent/version"
+	"github.com/open-oni/oni-agent/version"
 )
 
 type session struct {

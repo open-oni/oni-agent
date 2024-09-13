@@ -1,4 +1,4 @@
-module github.com/open-oni/batch-agent
+module github.com/open-oni/oni-agent
 
 go 1.22.5
 

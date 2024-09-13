@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gliderlabs/ssh"
-	"github.com/open-oni/batch-agent/version"
+	"github.com/open-oni/oni-agent/version"
 )
 
 // ONILocation is where Open ONI lives on the server, for invoking the
