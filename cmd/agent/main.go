@@ -10,15 +10,15 @@ import (
 	"github.com/open-oni/oni-agent/version"
 )
 
+// BABind is the address and port to bind this process
+var BABind string
+
 // ONILocation is where Open ONI lives on the server, for invoking the
 // management commands
 var ONILocation string
 
 // BatchSource is where batches can be found, necessary for the "load" command
 var BatchSource string
-
-// BABind is the address and port to bind this process
-var BABind string
 
 func main() {
 	BABind = os.Getenv("BA_BIND")
