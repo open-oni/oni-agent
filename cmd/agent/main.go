@@ -1,13 +1,19 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync/atomic"
 
-	"github.com/gliderlabs/ssh"
+	gliderssh "github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/version"
+	"golang.org/x/crypto/ssh"
 )
 
 // BABind is the address and port to bind this process
@@ -19,6 +25,9 @@ var ONILocation string
 
 // BatchSource is where batches can be found, necessary for the "load" command
 var BatchSource string
+
+// HostKeySigner is used for the ssh key presented to clients
+var HostKeySigner ssh.Signer
 
 func getEnvironment() {
 	BABind = os.Getenv("BA_BIND")
@@ -51,14 +60,83 @@ func getEnvironment() {
 		slog.Error("Invalid setting for BATCH_SOURCE", "error", err)
 		os.Exit(1)
 	}
+
+	var fname = os.Getenv("HOST_KEY_FILE")
+	if fname == "" {
+		slog.Error("HOST_KEY_FILE must be set")
+		os.Exit(1)
+	}
+	HostKeySigner, err = readKey(fname)
+	if err != nil {
+		slog.Error("HOST_KEY_FILE is invalid or cannot be read", "error", err)
+		os.Exit(1)
+	}
+}
+
+func readKey(keyfile string) (ssh.Signer, error) {
+	var data, err = os.ReadFile(keyfile)
+	if os.IsNotExist(err) {
+		slog.Warn("HOST_KEY_FILE doesn't exist; creating it with a random key", "path", keyfile)
+		return generateKey(keyfile)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
+	}
+
+	return ssh.ParsePrivateKey(data)
+}
+
+func writeKeyFiles(key *rsa.PrivateKey, filename string) error {
+	var priv = pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(key),
+		},
+	)
+
+	var pub = pem.EncodeToMemory(
+		&pem.Block{
+			Type:  "RSA PUBLIC KEY",
+			Bytes: x509.MarshalPKCS1PublicKey(&key.PublicKey),
+		},
+	)
+
+	var err = os.WriteFile(filename, priv, 0600)
+	if err != nil {
+		return fmt.Errorf("writing private key to %q: %w", filename, err)
+	}
+
+	filename += ".pub"
+	err = os.WriteFile(filename, pub, 0644)
+	if err != nil {
+		return fmt.Errorf("writing public key to %q: %w", filename, err)
+	}
+
+	return nil
+}
+
+func generateKey(filename string) (ssh.Signer, error) {
+	var key, err = rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, fmt.Errorf("generating key: %w", err)
+	}
+
+	err = writeKeyFiles(key, filename)
+	if err != nil {
+		return nil, fmt.Errorf("writing key files: %w", err)
+	}
+
+	return ssh.NewSignerFromKey(key)
 }
 
 func main() {
 	getEnvironment()
 
-	var srv = &ssh.Server{Addr: BABind}
+	var srv = &gliderssh.Server{Addr: BABind}
+	srv.AddHostKey(HostKeySigner)
+
 	var sessionID atomic.Uint64
-	srv.Handle(func(_s ssh.Session) {
+	srv.Handle(func(_s gliderssh.Session) {
 		var s = session{Session: _s, id: sessionID.Add(1)}
 
 		slog.Info("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand(), "user", s.User(), "id", s.id)
