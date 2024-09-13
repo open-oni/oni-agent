@@ -20,14 +20,12 @@ var ONILocation string
 // BatchSource is where batches can be found, necessary for the "load" command
 var BatchSource string
 
-func main() {
+func getEnvironment() {
 	BABind = os.Getenv("BA_BIND")
 	if BABind == "" {
 		slog.Error("BA_BIND must be set")
 		os.Exit(1)
 	}
-
-	var srv = &ssh.Server{Addr: BABind}
 
 	ONILocation = os.Getenv("ONI_LOCATION")
 
@@ -53,7 +51,12 @@ func main() {
 		slog.Error("Invalid setting for BATCH_SOURCE", "error", err)
 		os.Exit(1)
 	}
+}
 
+func main() {
+	getEnvironment()
+
+	var srv = &ssh.Server{Addr: BABind}
 	var sessionID atomic.Uint64
 	srv.Handle(func(_s ssh.Session) {
 		var s = session{Session: _s, id: sessionID.Add(1)}
