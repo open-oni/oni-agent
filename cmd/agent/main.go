@@ -139,9 +139,9 @@ func main() {
 	srv.Handle(func(_s gliderssh.Session) {
 		var s = session{Session: _s, id: sessionID.Add(1)}
 
-		slog.Info("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand(), "user", s.User(), "id", s.id)
+		s.logInfo("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand())
 		s.handle()
-		slog.Info("Connection closed", "source", s.RemoteAddr(), "command", s.RawCommand(), "user", s.User())
+		s.logInfo("Connection closed", "source", s.RemoteAddr(), "command", s.RawCommand())
 	})
 
 	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)

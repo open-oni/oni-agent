@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -30,51 +31,69 @@ const (
 // H is a simple type alias for more easily building JSON responses
 type H map[string]any
 
-func (s session) respond(st Status, data H) {
+func (s session) logInfo(msg string, args ...any) {
+	var combined = append([]any{"sessionID", s.id}, args...)
+	slog.Info(msg, combined...)
+}
+
+func (s session) logError(msg string, args ...any) {
+	var combined = append([]any{"sessionID", s.id}, args...)
+	slog.Error(msg, combined...)
+}
+
+func (s session) respond(st Status, msg string, data H) {
+	if data == nil {
+		data = H{}
+	}
 	data["status"] = st
+	data["sessionID"] = s.id
+	if msg != "" {
+		data["message"] = msg
+	}
 	var b, err = json.Marshal(data)
 	if err != nil {
-		slog.Error("marshaling data", "error", err, "data", data)
+		s.logError("Cannot marshal response", "error", err, "data", data)
+		return
 	}
-	slog.Info("marshaling data", "error", err, "data", data)
+
 	s.Write(b)
 }
 
 func (s session) handle() {
 	var cmds = s.Command()
 	if len(cmds) == 0 {
-		s.respond(StatusError, H{"message": " no command specified"})
+		s.respond(StatusError, "no command specified", nil)
 		return
 	}
 
 	var command = cmds[0]
 	switch command {
 	case "version":
-		s.respond(StatusSuccess, H{"version": version.Version})
+		s.respond(StatusSuccess, "", H{"version": version.Version})
 		return
 
 	case "load":
 		if len(cmds) != 2 {
-			s.respond(StatusError, H{"command": command, "message": "requires exactly one batch name"})
+			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
 		}
 		s.loadBatch(cmds[1])
 
 	case "purge":
 		if len(cmds) != 2 {
-			s.respond(StatusError, H{"command": command, "message": "requires exactly one batch name"})
+			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
 		}
 		s.purgeBatch(cmds[1])
 
 	default:
-		s.respond(StatusError, H{"command": command, "message": "unknown command"})
+		s.respond(StatusError, fmt.Sprintf("%q is not a valid command name", command), nil)
 		return
 	}
 }
 
 func (s session) loadBatch(name string) {
-	s.respond(StatusSuccess, H{"message": "starting batch load", "batch": name})
+	s.respond(StatusSuccess, "starting batch load", H{"batch": name})
 	var cmd = newManageCommand("load_batch", filepath.Join(BatchSource, name))
 
 	var stdout, stderr bytes.Buffer
@@ -84,15 +103,15 @@ func (s session) loadBatch(name string) {
 	go func() {
 		var err = cmd.Run()
 		if err == nil {
-			slog.Info("Successfully loaded batch", "name", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logInfo("Successfully loaded batch", "name", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		} else {
-			slog.Info("Error running command", "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logInfo("Error running command", "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		}
 	}()
 }
 
 func (s session) purgeBatch(name string) {
-	s.respond(StatusSuccess, H{"message": "starting batch purge", "batch": name})
+	s.respond(StatusSuccess, "starting batch purge", H{"batch": name})
 	var cmd = newManageCommand("purge_batch", name)
 
 	var stdout, stderr bytes.Buffer
@@ -102,9 +121,9 @@ func (s session) purgeBatch(name string) {
 	go func() {
 		var err = cmd.Run()
 		if err == nil {
-			slog.Info("Successfully purged batch", "batch", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logInfo("Successfully purged batch", "batch", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		} else {
-			slog.Info("Error purging batch", "batch", name, "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logError("Command failed", "batch", name, "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		}
 	}()
 }
