@@ -93,26 +93,18 @@ func (s session) handle() {
 }
 
 func (s session) loadBatch(name string) {
-	s.respond(StatusSuccess, "starting batch load", H{"batch": name})
-	var cmd = newManageCommand("load_batch", filepath.Join(BatchSource, name))
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	go func() {
-		var err = cmd.Run()
-		if err == nil {
-			s.logInfo("Successfully loaded batch", "name", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
-		} else {
-			s.logInfo("Error running command", "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
-		}
-	}()
+	s.queueJob("batch load", "load_batch", filepath.Join(BatchSource, name))
 }
 
 func (s session) purgeBatch(name string) {
-	s.respond(StatusSuccess, "starting batch purge", H{"batch": name})
-	var cmd = newManageCommand("purge_batch", name)
+	s.queueJob("batch purge", "purge_batch", name)
+}
+
+func (s session) queueJob(name string, command string, args ...string) {
+	s.respond(StatusSuccess, "starting "+name, H{"name": name, "command": command, "args": strings.Join(args, ",")})
+
+	var combined = append([]string{command}, args...)
+	var cmd = newManageCommand(combined...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -121,9 +113,9 @@ func (s session) purgeBatch(name string) {
 	go func() {
 		var err = cmd.Run()
 		if err == nil {
-			s.logInfo("Successfully purged batch", "batch", name, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		} else {
-			s.logError("Command failed", "batch", name, "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
 		}
 	}()
 }
