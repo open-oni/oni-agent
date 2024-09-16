@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -104,49 +101,14 @@ func (s session) queueJob(name string, command string, args ...string) {
 	s.respond(StatusSuccess, "starting "+name, H{"name": name, "command": command, "args": strings.Join(args, ",")})
 
 	var combined = append([]string{command}, args...)
-	var cmd = newManageCommand(combined...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	var job = newJob(combined...)
 
 	go func() {
-		var err = cmd.Run()
+		var err = job.Run()
 		if err == nil {
-			s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
 		} else {
-			s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(stdout.Bytes()), "STDERR", string(stderr.Bytes()))
+			s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
 		}
 	}()
-}
-
-func newManageCommand(args ...string) *exec.Cmd {
-	var manage = filepath.Join(ONILocation, "manage.py")
-	var cmd = exec.Command(manage, args...)
-
-	// Apply Python's virtual environment, which essentially operates by setting
-	// three env vars. There's other stuff for changing the prompt, storing info
-	// for deactivation, etc., but this is the only part that matters for
-	// executing the "manage.py" script:
-	//
-	//   - export VIRTUAL_ENV=/opt/openoni/ENV
-	//   - export PATH="$VIRTUAL_ENV/bin:$PATH"
-	//   - unset PYTHONHOME
-	var eVars = cmd.Environ()
-	var path []string
-	var pathListSeparator = string(os.PathListSeparator)
-	for _, val := range eVars {
-		var parts = strings.SplitN(val, "=", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		if parts[0] == "PATH" {
-			path = strings.Split(parts[1], pathListSeparator)
-		}
-	}
-	path = append([]string{"/opt/openoni/ENV/bin"}, path...)
-	cmd.Env = append(cmd.Env, "VIRTUAL_ENV=/opt/openoni/ENV")
-	cmd.Env = append(cmd.Env, "PATH="+strings.Join(path, pathListSeparator))
-
-	return cmd
 }
