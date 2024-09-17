@@ -112,12 +112,20 @@ func (s session) queueJob(name string, command string, args ...string) {
 
 	s.respond(StatusSuccess, "started process", response)
 	s.logInfo("Started process", "name", name, "command", command, "args", args)
-	s.Close()
+	s.close()
 
 	err = job.Wait()
 	if err == nil {
 		s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
 	} else {
 		s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
+	}
+}
+
+func (s session) close() {
+	s.logInfo("Closing connection...")
+	var err = s.Session.Close()
+	if err != nil {
+		s.logError("Error closing connection", "error", err)
 	}
 }

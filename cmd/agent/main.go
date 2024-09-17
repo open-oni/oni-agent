@@ -141,7 +141,7 @@ func main() {
 
 		s.logInfo("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand())
 		s.handle()
-		s.logInfo("Connection closed", "source", s.RemoteAddr(), "command", s.RawCommand())
+		s.logInfo("Process complete", "source", s.RemoteAddr(), "command", s.RawCommand())
 	})
 
 	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
