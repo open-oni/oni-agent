@@ -78,8 +78,8 @@ directory, etc.
 
 ```bash
 # Purge version 1 of "myankeny" and load version 2
-ssh -p2222 nobody@your.oni.host -C "purge 'batch_oru_myankeny_ver01'"
-ssh -p2222 nobody@your.oni.host -C "load 'batch_oru_myankeny_ver02'"
+ssh -p2222 nobody@your.oni.host -C "purge-batch 'batch_oru_myankeny_ver01'"
+ssh -p2222 nobody@your.oni.host -C "load-batch 'batch_oru_myankeny_ver02'"
 ```
 
 The username doesn't matter: ONI Agent doesn't use this for anything. There is

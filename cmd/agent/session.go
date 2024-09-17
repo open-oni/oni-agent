@@ -69,14 +69,14 @@ func (s session) handle() {
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 		return
 
-	case "load":
+	case "load-batch":
 		if len(cmds) != 2 {
 			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
 		}
 		s.loadBatch(cmds[1])
 
-	case "purge":
+	case "purge-batch":
 		if len(cmds) != 2 {
 			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
