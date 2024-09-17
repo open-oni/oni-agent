@@ -98,17 +98,26 @@ func (s session) purgeBatch(name string) {
 }
 
 func (s session) queueJob(name string, command string, args ...string) {
-	s.respond(StatusSuccess, "starting "+name, H{"name": name, "command": command, "args": strings.Join(args, ",")})
-
 	var combined = append([]string{command}, args...)
 	var job = newJob(combined...)
 
-	go func() {
-		var err = job.Run()
-		if err == nil {
-			s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
-		} else {
-			s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
-		}
-	}()
+	var response = H{"name": name, "command": command, "args": strings.Join(args, ",")}
+	var err = job.Start()
+	if err != nil {
+		response["error"] = err.Error()
+		s.respond(StatusError, "couldn't start process", response)
+		s.logError("Unable to start process", "name", name, "command", command, "args", args, "error", err)
+		return
+	}
+
+	s.respond(StatusSuccess, "started process", response)
+	s.logInfo("Started process", "name", name, "command", command, "args", args)
+	s.Close()
+
+	err = job.Wait()
+	if err == nil {
+		s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
+	} else {
+		s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
+	}
 }
