@@ -81,3 +81,14 @@ func (j *Job) wait() error {
 func (j *Job) ID() uint64 {
 	return j.id
 }
+
+// Status returns the job's status value
+func (j *Job) Status() JobStatus {
+	return j.status
+}
+
+// Error returns the first error which occurred when queueing, starting, or
+// running the job
+func (j *Job) Error() error {
+	return j.err
+}

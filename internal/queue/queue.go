@@ -72,6 +72,11 @@ func (q *Queue) NewJob(args ...string) uint64 {
 	return j.id
 }
 
+// GetJob returns a job by its id
+func (q *Queue) GetJob(id uint64) *Job {
+	return q.lookup[id]
+}
+
 // Wait runs until ctx is canceled, watching for new jobs that need to be
 // queued up
 func (q *Queue) Wait(ctx context.Context) {
