@@ -9,9 +9,16 @@ loading/purging commands when requested via a simple API over SSH.
 
 ONI Agent listens on a configured port for ssh connections and runs a batch
 load or purge command based on the request. It doesn't try to parse ONI's logs
-to determine success or failure, it doesn't even try to communicate much to the
-caller beyond letting the caller know we tried to do something. It's up to the
-caller to use other ONI endpoints to see what's working and what isn't.
+to determine success or failure of a specific command, it just notes whether a
+job ran or not.
+
+Generally, if a command exits successfully, it means ONI had no trouble.
+Unfortunately, the converse isn't always true: for instance, a batch purge will
+return a failure when the batch doesn't exist. This is just how ONI works, and
+we aren't trying to fix that with this tool.
+
+There's a basic API for getting job statuses and logs, but nothing
+"intelligent" happens under the hood.
 
 We aren't trying to provide a robust API here, just a way to run management
 commands slightly less manually.
@@ -67,6 +74,47 @@ ssh -p2222 nobody@your.oni.host -C "load-batch 'batch_oru_myankeny_ver02'"
 The username doesn't matter: ONI Agent doesn't use this for anything. There is
 no password, no ssh keys to worry about, etc. The *connection* is secure, but
 it's up to you to keep the port locked down to internal connections.
+
+If you are asking ONI Agent for actions to be performed, the agent adds the
+jobs to a queue and runs them one at a time in the order they were received.
+This ensures the server won't become unusable in the event several huge batches
+are trying to load at once.
+
+You can use a tool like `jq` to parse the JSON responses returned by the
+server. Your best bet is to look at the code to see what you can expect, but
+you will generally see a job structure that contains an "id" field when a job
+is created. You can use that to request more data.
+
+For instance, a full exchange might look like this:
+
+```
+$ ssh -p2222 nobody@localhost -C "load-batch batch_hillsborohistoricalsociety_20240912H3MahoganyOrcoMammanBehindShrubs_ver01" | jq
+{
+  "job": {
+    "id": 7
+  },
+  "message": "Job added to queue",
+  "session": {
+    "id": 15
+  },
+  "status": "success"
+}
+
+$ ssh -p2222 nobody@localhost -C "job-status 7" | jq
+{
+  "job": {
+    "id": 7,
+    "status": "successful"
+  },
+  "message": "Success: this job is complete.",
+  "session": {
+    "id": 17
+  },
+  "status": "success"
+}
+```
+
+Other commands include "job-logs" and "version".
 
 [nca]: <https://github.com/uoregon-libraries/newspaper-curation-app>
 
