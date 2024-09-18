@@ -66,6 +66,7 @@ func (q *Queue) NewJob(args ...string) uint64 {
 		status:   StatusPending,
 		queuedAt: time.Now(),
 	}
+	q.lookup[j.id] = j
 	q.queue <- j
 
 	return j.id
