@@ -45,7 +45,7 @@ func (s session) respond(st Status, msg string, data H) {
 		data = H{}
 	}
 	data["status"] = st
-	data["sessionID"] = s.id
+	data["session"] = H{"id": s.id}
 	if msg != "" {
 		data["message"] = msg
 	}
@@ -102,7 +102,7 @@ func (s session) queueJob(name string, command string, args ...string) {
 	var combined = append([]string{command}, args...)
 	var id = JobRunner.NewJob(combined...)
 
-	s.respond(StatusSuccess, "Job added to queue", H{"id": id})
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 	s.close()
 }
 
