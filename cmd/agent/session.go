@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"strings"
+	"sync/atomic"
 
 	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/version"
 )
+
+var sessionID atomic.Uint64
 
 type session struct {
 	ssh.Session
@@ -67,7 +69,6 @@ func (s session) handle() {
 	switch command {
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
-		return
 
 	case "load-batch":
 		if len(cmds) != 2 {
@@ -99,27 +100,10 @@ func (s session) purgeBatch(name string) {
 
 func (s session) queueJob(name string, command string, args ...string) {
 	var combined = append([]string{command}, args...)
-	var job = newJob(combined...)
+	var id = JobRunner.NewJob(combined...)
 
-	var response = H{"name": name, "command": command, "args": strings.Join(args, ",")}
-	var err = job.Start()
-	if err != nil {
-		response["error"] = err.Error()
-		s.respond(StatusError, "couldn't start process", response)
-		s.logError("Unable to start process", "name", name, "command", command, "args", args, "error", err)
-		return
-	}
-
-	s.respond(StatusSuccess, "started process", response)
-	s.logInfo("Started process", "name", name, "command", command, "args", args)
+	s.respond(StatusSuccess, "Job added to queue", H{"id": id})
 	s.close()
-
-	err = job.Wait()
-	if err == nil {
-		s.logInfo("Command completed", "name", name, "command", combined, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
-	} else {
-		s.logError("Command failed", "name", name, "command", combined, "error", err, "STDOUT", string(job.stdout.Bytes()), "STDERR", string(job.stderr.Bytes()))
-	}
 }
 
 func (s session) close() {

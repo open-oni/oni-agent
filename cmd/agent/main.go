@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -12,6 +13,7 @@ import (
 	"sync/atomic"
 
 	gliderssh "github.com/gliderlabs/ssh"
+	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/version"
 	"golang.org/x/crypto/ssh"
 )
@@ -28,6 +30,10 @@ var BatchSource string
 
 // HostKeySigner is used for the ssh key presented to clients
 var HostKeySigner ssh.Signer
+
+// JobRunner manages all the details needed for keeping a list of pending
+// background jobs, providing status of existing jobs, etc.
+var JobRunner *queue.Queue
 
 func getEnvironment() {
 	BABind = os.Getenv("BA_BIND")
@@ -131,6 +137,7 @@ func generateKey(filename string) (ssh.Signer, error) {
 
 func main() {
 	getEnvironment()
+	JobRunner = queue.New(ONILocation)
 
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)
@@ -141,12 +148,15 @@ func main() {
 
 		s.logInfo("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand())
 		s.handle()
-		s.logInfo("Process complete", "source", s.RemoteAddr(), "command", s.RawCommand())
+		s.logInfo("Session closed", "source", s.RemoteAddr(), "command", s.RawCommand())
 	})
 
+	go JobRunner.Wait(context.Background())
 	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
 	if err := srv.ListenAndServe(); err != nil {
 		slog.Error("Unable to serve SSH", "error", err)
 		os.Exit(1)
 	}
+
+	slog.Info("Closing...")
 }
