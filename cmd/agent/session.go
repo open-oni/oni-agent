@@ -100,11 +100,11 @@ func (s session) handle() {
 }
 
 func (s session) loadBatch(name string) {
-	s.queueJob("batch load", "load_batch", filepath.Join(BatchSource, name))
+	s.queueJob("load_batch", filepath.Join(BatchSource, name))
 }
 
 func (s session) purgeBatch(name string) {
-	s.queueJob("batch purge", "purge_batch", name)
+	s.queueJob("purge_batch", name)
 }
 
 func (s session) getJobStatus(arg string) {
@@ -137,7 +137,7 @@ func (s session) getJobStatus(arg string) {
 	}
 }
 
-func (s session) queueJob(name string, command string, args ...string) {
+func (s session) queueJob(command string, args ...string) {
 	var combined = append([]string{command}, args...)
 	var id = JobRunner.NewJob(combined...)
 
