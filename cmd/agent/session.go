@@ -120,21 +120,30 @@ func (s session) getJobStatus(arg string) {
 		return
 	}
 
+	var jobdata = H{"id": j.ID(), "status": j.Status()}
+	var status = StatusSuccess
+	var message string
+
 	switch j.Status() {
 	case queue.StatusPending:
-		s.respond(StatusSuccess, "Pending: this job is in the queue but hasn't been started yet.", nil)
+		message = "Pending: this job is in the queue but hasn't been started yet."
 	case queue.StatusStarted:
-		s.respond(StatusSuccess, "Started: this job is currently running.", nil)
+		message = "Started: this job is currently running."
 	case queue.StatusFailStart:
-		s.respond(StatusSuccess, "Invalid: this job was not able to start.", H{"error": j.Error()})
+		jobdata["error"] = j.Error()
+		message = "Invalid: this job was not able to start."
 	case queue.StatusSuccessful:
-		s.respond(StatusSuccess, "Success: this job is complete.", nil)
+		message = "Success: this job is complete."
 	case queue.StatusFailed:
-		s.respond(StatusSuccess, "Failed: this job started but returned a non-zero exit code.", H{"error": j.Error()})
+		jobdata["error"] = j.Error()
+		message = "Failed: this job started but returned a non-zero exit code."
 	default:
 		s.logError("Invalid job status", "jobID", j.ID(), "jobStatus", j.Status())
-		s.respond(StatusError, "Internal error: unknown job status", nil)
+		status = StatusError
+		message = "Internal error: unknown job status"
 	}
+
+	s.respond(status, message, H{"job": jobdata})
 }
 
 func (s session) queueJob(command string, args ...string) {
