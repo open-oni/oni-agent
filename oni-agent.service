@@ -1,0 +1,16 @@
+[Unit]
+  Description=ONI Agent
+  After=network.target
+  RequiresMountsFor=/mnt/news
+
+[Service]
+  Environment="BA_BIND=:2222"
+  Environment="BATCH_SOURCE=/mnt/news/production-batches"
+  Environment="ONI_LOCATION=/opt/openoni/"
+  Environment="HOST_KEY_FILE=/etc/oni-agent"
+  Type=simple
+  ExecStart=/usr/local/oni-agent/agent
+  SyslogIdentifier=oni-agent
+
+[Install]
+  WantedBy=multi-user.target

@@ -47,27 +47,9 @@ make
 ./bin/agent
 ```
 
-You can also trivially set this up in systemd. **Note**: we haven't tested this
-exact setup just yet, so the example unit file may need tweaks!
-
-```
-[Unit]
-	Description=ONI Agent
-	After=network.target
-	RequiresMountsFor=/mnt/news
-
-[Service]
-  Environment="BA_BIND=:2222"
-  Environment="BATCH_SOURCE=/mnt/news/production-batches"
-  Environment="ONI_LOCATION=/opt/openoni/"
-  Environment="HOST_KEY_FILE=/etc/oni-agent"
-	Type=simple
-	ExecStart=/usr/local/oni-agent/agent
-	SyslogIdentifier=oni-agent
-
-[Install]
-	WantedBy=multi-user.target
-```
+You can also trivially set this up in systemd using
+[`oni-agent.service`](oni-agent.service) as a template for your own
+environment.
 
 ### Usage
 
