@@ -10,7 +10,7 @@ import (
 
 	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
-	"github.com/open-oni/oni-agent/version"
+	"github.com/open-oni/oni-agent/internal/version"
 )
 
 var sessionID atomic.Uint64

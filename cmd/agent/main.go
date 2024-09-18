@@ -14,7 +14,7 @@ import (
 
 	gliderssh "github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
-	"github.com/open-oni/oni-agent/version"
+	"github.com/open-oni/oni-agent/internal/version"
 	"golang.org/x/crypto/ssh"
 )
 
