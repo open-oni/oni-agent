@@ -107,16 +107,25 @@ func (s session) purgeBatch(name string) {
 	s.queueJob("purge_batch", name)
 }
 
-func (s session) getJobStatus(arg string) {
+func (s session) getJob(arg string) (job *queue.Job, found bool) {
 	var id, _ = strconv.ParseUint(arg, 10, 64)
 	if id == 0 {
 		s.respond(StatusError, fmt.Sprintf("%q is not a valid job id", arg), nil)
-		return
+		return nil, false
 	}
 
 	var j = JobRunner.GetJob(id)
 	if j == nil {
 		s.respond(StatusError, "Job not found", H{"job": H{"id": id}})
+		return nil, false
+	}
+
+	return j, true
+}
+
+func (s session) getJobStatus(arg string) {
+	var j, found = s.getJob(arg)
+	if !found {
 		return
 	}
 
