@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -91,4 +92,19 @@ func (j *Job) Status() JobStatus {
 // running the job
 func (j *Job) Error() error {
 	return j.err
+}
+
+func getOutput(buf bytes.Buffer) []string {
+	var lines = strings.Replace(string(buf.Bytes()), "\r\n", "\n", -1)
+	return strings.Split(lines, "\n")
+}
+
+// Stdout returns the captured output to STDOUT
+func (j *Job) Stdout() []string {
+	return getOutput(j.stdout)
+}
+
+// Stderr returns the captured output to STDERR
+func (j *Job) Stderr() []string {
+	return getOutput(j.stderr)
 }

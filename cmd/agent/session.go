@@ -79,6 +79,13 @@ func (s session) handle() {
 		}
 		s.getJobStatus(cmds[1])
 
+	case "job-logs":
+		if len(cmds) != 2 {
+			s.respond(StatusError, "You must supply a job ID", nil)
+			return
+		}
+		s.getJobLogs(cmds[1])
+
 	case "load-batch":
 		if len(cmds) != 2 {
 			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
@@ -153,6 +160,21 @@ func (s session) getJobStatus(arg string) {
 	}
 
 	s.respond(status, message, H{"job": jobdata})
+}
+
+func (s session) getJobLogs(arg string) {
+	var j, found = s.getJob(arg)
+	if !found {
+		return
+	}
+
+	var out = H{"job": H{
+		"id":     j.ID(),
+		"status": j.Status(),
+		"stdout": j.Stdout(),
+		"stderr": j.Stderr(),
+	}}
+	s.respond(StatusSuccess, "", out)
 }
 
 func (s session) queueJob(command string, args ...string) {
