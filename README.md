@@ -67,8 +67,8 @@ directory, etc.
 
 ```bash
 # Purge version 1 of "myankeny" and load version 2
-ssh -p2222 nobody@your.oni.host -C "purge-batch 'batch_oru_myankeny_ver01'"
-ssh -p2222 nobody@your.oni.host -C "load-batch 'batch_oru_myankeny_ver02'"
+ssh -p2222 nobody@your.oni.host "purge-batch 'batch_oru_myankeny_ver01'"
+ssh -p2222 nobody@your.oni.host "load-batch 'batch_oru_myankeny_ver02'"
 ```
 
 The username doesn't matter: ONI Agent doesn't use this for anything. There is
@@ -88,7 +88,7 @@ is created. You can use that to request more data.
 For instance, a full exchange might look like this:
 
 ```
-$ ssh -p2222 nobody@localhost -C "load-batch batch_hillsborohistoricalsociety_20240912H3MahoganyOrcoMammanBehindShrubs_ver01" | jq
+$ ssh -p2222 nobody@localhost "load-batch batch_hillsborohistoricalsociety_20240912H3MahoganyOrcoMammanBehindShrubs_ver01" | jq
 {
   "job": {
     "id": 7
@@ -100,7 +100,7 @@ $ ssh -p2222 nobody@localhost -C "load-batch batch_hillsborohistoricalsociety_20
   "status": "success"
 }
 
-$ ssh -p2222 nobody@localhost -C "job-status 7" | jq
+$ ssh -p2222 nobody@localhost "job-status 7" | jq
 {
   "job": {
     "id": 7,
