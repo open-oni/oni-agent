@@ -58,6 +58,12 @@ func (s session) respond(st Status, msg string, data H) {
 	}
 
 	s.Write(b)
+
+	if st == StatusError {
+		s.close(1)
+	} else {
+		s.close(0)
+	}
 }
 
 func (s session) handle() {
@@ -182,12 +188,11 @@ func (s session) queueJob(command string, args ...string) {
 	var id = JobRunner.NewJob(combined...)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
-	s.close()
 }
 
-func (s session) close() {
+func (s session) close(status int) {
 	s.logInfo("Closing connection...")
-	var err = s.Session.Close()
+	var err = s.Session.Exit(status)
 	if err != nil {
 		s.logError("Error closing connection", "error", err)
 	}
