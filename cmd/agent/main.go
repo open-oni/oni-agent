@@ -151,11 +151,17 @@ func main() {
 		s.logInfo("Session closed", "source", s.RemoteAddr(), "command", s.RawCommand())
 	})
 
-	go JobRunner.Wait(context.Background())
+	var ctx, cancel = context.WithCancel(context.Background())
+	trapIntTerm(func() {
+		cancel()
+		srv.Close()
+	})
+	go JobRunner.Wait(ctx)
+
 	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
-	if err := srv.ListenAndServe(); err != nil {
+	var err = srv.ListenAndServe()
+	if err != nil && err != gliderssh.ErrServerClosed {
 		slog.Error("Unable to serve SSH", "error", err)
-		os.Exit(1)
 	}
 
 	slog.Info("Closing...")
