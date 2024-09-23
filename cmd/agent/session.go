@@ -58,12 +58,7 @@ func (s session) respond(st Status, msg string, data H) {
 	}
 
 	s.Write(b)
-
-	if st == StatusError {
-		s.close(1)
-	} else {
-		s.close(0)
-	}
+	s.close()
 }
 
 func (s session) handle() {
@@ -190,9 +185,12 @@ func (s session) queueJob(command string, args ...string) {
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 }
 
-func (s session) close(status int) {
+// close terminates the session, always with a status of 0: Go ssh clients
+// return an error if the request is anything but successful, so the caller has
+// to parse the status instead.
+func (s session) close() {
 	s.logInfo("Closing connection...")
-	var err = s.Session.Exit(status)
+	var err = s.Session.Exit(0)
 	if err != nil {
 		s.logError("Error closing connection", "error", err)
 	}
