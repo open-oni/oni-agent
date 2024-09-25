@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 0, time.UTC)
+var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 123456789, time.UTC)
 
 func gettf(addSeconds int) timeFunc {
 	return func() time.Time {
@@ -26,14 +26,14 @@ func TestWrite(t *testing.T) {
 	var tests = map[string]tcase{
 		"Multiple writes, no newlines": {
 			inputs:   []string{"foo", "bar", "baz"},
-			expected: []string{"[2024-09-25T00:00:03Z] foobarbaz"},
+			expected: []string{"[2024-09-25T00:00:03.123456789Z] foobarbaz"},
 		},
 		"Multiple writes with newlines, trailing write": {
 			inputs:   []string{"foo\n", "bar\n", "baz"},
 			expected: []string{
-				"[2024-09-25T00:00:01Z] foo",
-				"[2024-09-25T00:00:02Z] bar",
-				"[2024-09-25T00:00:03Z] baz",
+				"[2024-09-25T00:00:01.123456789Z] foo",
+				"[2024-09-25T00:00:02.123456789Z] bar",
+				"[2024-09-25T00:00:03.123456789Z] baz",
 			},
 		},
 	}

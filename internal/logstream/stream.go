@@ -16,7 +16,7 @@ type Log struct {
 
 // String returns the entry with a prepended timestamp
 func (l Log) String() string {
-	return fmt.Sprintf("[%s] %s", l.Timestamp.Format(time.RFC3339), l.Value)
+	return fmt.Sprintf("[%s] %s", l.Timestamp.Format(time.RFC3339Nano), l.Value)
 }
 
 type Stream struct {
