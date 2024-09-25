@@ -1,12 +1,12 @@
 package queue
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
+
+	"github.com/open-oni/oni-agent/internal/logstream"
 )
 
 // JobStatus is a way to tell callers what's going on with any job in the queue
@@ -31,8 +31,8 @@ type Job struct {
 	startedAt   time.Time
 	completedAt time.Time
 	err         error
-	stdout      bytes.Buffer
-	stderr      bytes.Buffer
+	stdout      logstream.Stream
+	stderr      logstream.Stream
 	pid         int
 }
 
@@ -94,20 +94,12 @@ func (j *Job) Error() error {
 	return j.err
 }
 
-func getOutput(buf bytes.Buffer) []string {
-	var cleaned = strings.Replace(strings.TrimSpace(string(buf.Bytes())), "\r\n", "\n", -1)
-	if cleaned == "" {
-		return []string{}
-	}
-	return strings.Split(cleaned, "\n")
-}
-
 // Stdout returns the captured output to STDOUT
 func (j *Job) Stdout() []string {
-	return getOutput(j.stdout)
+	return j.stdout.Timestamped()
 }
 
 // Stderr returns the captured output to STDERR
 func (j *Job) Stderr() []string {
-	return getOutput(j.stderr)
+	return j.stderr.Timestamped()
 }
