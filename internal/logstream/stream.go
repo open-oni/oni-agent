@@ -16,7 +16,13 @@ type Log struct {
 
 // String returns the entry with a prepended timestamp
 func (l Log) String() string {
-	return fmt.Sprintf("[%s] %s", l.Timestamp.Format(time.RFC3339Nano), l.Value)
+	// Custom format so we can force our nanosecond timestamp in with exactly
+	// nine effing digits
+	var tfmt = "2006-01-02T15:04:05||Z07:00"
+	var log = fmt.Sprintf("[%s] %s", l.Timestamp.Format(tfmt), l.Value)
+	var nanos = fmt.Sprintf(".%09d", l.Timestamp.Nanosecond())
+	log = strings.Replace(log, "||", nanos, 1)
+	return log
 }
 
 type Stream struct {
