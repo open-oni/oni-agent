@@ -95,7 +95,8 @@ func (j *Job) Error() error {
 }
 
 func getOutput(buf bytes.Buffer) []string {
-	var lines = strings.Replace(string(buf.Bytes()), "\r\n", "\n", -1)
+	var s = strings.TrimSpace(string(buf.Bytes()))
+	var lines = strings.Replace(s, "\r\n", "\n", -1)
 	return strings.Split(lines, "\n")
 }
 
