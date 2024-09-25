@@ -12,11 +12,12 @@ import (
 type Log struct {
 	Timestamp time.Time
 	Value     string
+	Sequence  int
 }
 
 // String returns the entry with a prepended timestamp
 func (l Log) String() string {
-	return fmt.Sprintf("[%s] %s", l.Timestamp.Format(time.RFC3339Nano), l.Value)
+	return fmt.Sprintf("[%s - %04d] %s", l.Timestamp.Format(time.RFC3339Nano), l.Sequence+1, l.Value)
 }
 
 type Stream struct {
@@ -64,7 +65,7 @@ func (s *Stream) Write(data []byte) (n int, err error) {
 
 	s.lastWrite = timeNow()
 	for _, line := range lines {
-		s.Logs = append(s.Logs, Log{Timestamp: s.lastWrite, Value: line})
+		s.Logs = append(s.Logs, Log{Timestamp: s.lastWrite, Value: line, Sequence: len(s.Logs)})
 	}
 
 	return n, nil
@@ -79,7 +80,7 @@ func (s *Stream) Timestamped() []string {
 		out = append(out, log.String())
 	}
 	if s.unprocessed != "" {
-		var log = Log{Timestamp: s.lastWrite, Value: s.unprocessed}
+		var log = Log{Timestamp: s.lastWrite, Value: s.unprocessed, Sequence: len(s.Logs)}
 		out = append(out, log.String())
 	}
 

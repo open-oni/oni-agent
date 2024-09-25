@@ -26,14 +26,14 @@ func TestWrite(t *testing.T) {
 	var tests = map[string]tcase{
 		"Multiple writes, no newlines": {
 			inputs:   []string{"foo", "bar", "baz"},
-			expected: []string{"[2024-09-25T00:00:03.123456789Z] foobarbaz"},
+			expected: []string{"[2024-09-25T00:00:03.123456789Z - 0001] foobarbaz"},
 		},
 		"Multiple writes with newlines, trailing write": {
 			inputs:   []string{"foo\n", "bar\n", "baz"},
 			expected: []string{
-				"[2024-09-25T00:00:01.123456789Z] foo",
-				"[2024-09-25T00:00:02.123456789Z] bar",
-				"[2024-09-25T00:00:03.123456789Z] baz",
+				"[2024-09-25T00:00:01.123456789Z - 0001] foo",
+				"[2024-09-25T00:00:02.123456789Z - 0002] bar",
+				"[2024-09-25T00:00:03.123456789Z - 0003] baz",
 			},
 		},
 	}
