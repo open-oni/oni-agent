@@ -65,6 +65,7 @@ func (s *Stream) Write(data []byte) (n int, err error) {
 	s.lastWrite = timeNow()
 	for _, line := range lines {
 		s.Logs = append(s.Logs, Log{Timestamp: s.lastWrite, Value: line})
+		s.lastWrite = s.lastWrite.Add(time.Nanosecond)
 	}
 
 	return n, nil

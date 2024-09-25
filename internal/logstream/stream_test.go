@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 123456789, time.UTC)
+var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 987654321, time.UTC)
 
 func gettf(addSeconds int) timeFunc {
 	return func() time.Time {
@@ -26,14 +26,24 @@ func TestWrite(t *testing.T) {
 	var tests = map[string]tcase{
 		"Multiple writes, no newlines": {
 			inputs:   []string{"foo", "bar", "baz"},
-			expected: []string{"[2024-09-25T00:00:03.123456789Z] foobarbaz"},
+			expected: []string{"[2024-09-25T00:00:03.987654321Z] foobarbaz"},
 		},
 		"Multiple writes with newlines, trailing write": {
 			inputs:   []string{"foo\n", "bar\n", "baz"},
 			expected: []string{
-				"[2024-09-25T00:00:01.123456789Z] foo",
-				"[2024-09-25T00:00:02.123456789Z] bar",
-				"[2024-09-25T00:00:03.123456789Z] baz",
+				"[2024-09-25T00:00:01.987654321Z] foo",
+				"[2024-09-25T00:00:02.987654321Z] bar",
+				"[2024-09-25T00:00:03.987654321Z] baz",
+			},
+		},
+		"Multiple logs in a single write, yielding fake nanosecond increments": {
+			inputs: []string{"write 1 log 1\nwrite 1 log 2\nwrite 1 log 3\n", "write 2 log 1\nwrite 2 log 2\n"},
+			expected: []string{
+				"[2024-09-25T00:00:01.987654321Z] write 1 log 1",
+				"[2024-09-25T00:00:01.987654322Z] write 1 log 2",
+				"[2024-09-25T00:00:01.987654323Z] write 1 log 3",
+				"[2024-09-25T00:00:02.987654321Z] write 2 log 1",
+				"[2024-09-25T00:00:02.987654322Z] write 2 log 2",
 			},
 		},
 	}
