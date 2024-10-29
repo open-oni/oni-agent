@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"database/sql"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync/atomic"
 
 	gliderssh "github.com/gliderlabs/ssh"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 	"golang.org/x/crypto/ssh"
@@ -34,6 +36,9 @@ var HostKeySigner ssh.Signer
 // JobRunner manages all the details needed for keeping a list of pending
 // background jobs, providing status of existing jobs, etc.
 var JobRunner *queue.Queue
+
+// dbPool is our single DB connection shared app-wide
+var dbPool *sql.DB
 
 func getEnvironment() {
 	var errList []error
@@ -84,12 +89,26 @@ func getEnvironment() {
 		}
 	}
 
+	var connect = os.Getenv("DB_CONNECTION")
+	if connect == "" {
+		errList = append(errList, errors.New(`DB_CONNECTION must be set (e.g., "user:pass@tcp(127.0.0.1:3306)/dbname")`))
+	} else {
+		dbPool, err = sql.Open("mysql", connect)
+		if err != nil {
+			errList = append(errList, fmt.Errorf(`DB_CONNECTION is invalid: %w`, err))
+		}
+	}
+
 	if len(errList) > 0 {
 		for _, err := range errList {
 			fmt.Fprintf(os.Stderr, " - %s\n", err)
 		}
 		os.Exit(1)
 	}
+
+	dbPool.SetConnMaxLifetime(0)
+	dbPool.SetMaxIdleConns(3)
+	dbPool.SetMaxOpenConns(3)
 }
 
 func readKey(keyfile string) (ssh.Signer, error) {
@@ -168,6 +187,7 @@ func main() {
 	trapIntTerm(func() {
 		cancel()
 		srv.Close()
+		dbPool.Close()
 	})
 	go JobRunner.Wait(ctx)
 
