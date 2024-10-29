@@ -62,44 +62,44 @@ func (s session) respond(st Status, msg string, data H) {
 }
 
 func (s session) handle() {
-	var cmds = s.Command()
-	if len(cmds) == 0 {
+	var parts = s.Command()
+	if len(parts) == 0 {
 		s.respond(StatusError, "no command specified", nil)
 		return
 	}
 
-	var command = cmds[0]
+	var command, args = parts[0], parts[1:]
 	switch command {
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 
 	case "job-status":
-		if len(cmds) != 2 {
+		if len(args) != 1 {
 			s.respond(StatusError, "You must supply a job ID", nil)
 			return
 		}
-		s.getJobStatus(cmds[1])
+		s.getJobStatus(args[0])
 
 	case "job-logs":
-		if len(cmds) != 2 {
+		if len(args) != 1 {
 			s.respond(StatusError, "You must supply a job ID", nil)
 			return
 		}
-		s.getJobLogs(cmds[1])
+		s.getJobLogs(args[0])
 
 	case "load-batch":
-		if len(cmds) != 2 {
+		if len(args) != 1 {
 			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
 		}
-		s.loadBatch(cmds[1])
+		s.loadBatch(args[0])
 
 	case "purge-batch":
-		if len(cmds) != 2 {
+		if len(args) != 1 {
 			s.respond(StatusError, fmt.Sprintf("%q requires exactly one batch name", command), nil)
 			return
 		}
-		s.purgeBatch(cmds[1])
+		s.purgeBatch(args[0])
 
 	default:
 		s.respond(StatusError, fmt.Sprintf("%q is not a valid command name", command), nil)
