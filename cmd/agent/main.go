@@ -36,45 +36,58 @@ var HostKeySigner ssh.Signer
 var JobRunner *queue.Queue
 
 func getEnvironment() {
+	var errList []error
+	var err error
+
 	BABind = os.Getenv("BA_BIND")
 	if BABind == "" {
-		slog.Error("BA_BIND must be set")
-		os.Exit(1)
+		errList = append(errList, errors.New("BA_BIND must be set"))
 	}
 
 	ONILocation = os.Getenv("ONI_LOCATION")
-
-	var info, err = os.Stat(ONILocation)
-	if err == nil {
-		if !info.IsDir() {
-			err = errors.New("not a valid directory")
+	if ONILocation == "" {
+		errList = append(errList, errors.New("ONI_LOCATION must be set"))
+	} else {
+		var info, err = os.Stat(ONILocation)
+		if err == nil {
+			if !info.IsDir() {
+				err = errors.New("not a valid directory")
+			}
 		}
-	}
-	if err != nil {
-		slog.Error("Invalid setting for ONI_LOCATION", "error", err)
-		os.Exit(1)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("Invalid setting for ONI_LOCATION: %w", err))
+		}
 	}
 
 	BatchSource = os.Getenv("BATCH_SOURCE")
-	info, err = os.Stat(BatchSource)
-	if err == nil {
-		if !info.IsDir() {
-			err = errors.New("not a valid directory")
+	if BatchSource == "" {
+		errList = append(errList, errors.New("BATCH_SOURCE must be set"))
+	} else {
+		var info, err = os.Stat(BatchSource)
+		if err == nil {
+			if !info.IsDir() {
+				err = errors.New("not a valid directory")
+			}
 		}
-	}
-	if err != nil {
-		slog.Error("Invalid setting for BATCH_SOURCE", "error", err)
-		os.Exit(1)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("Invalid setting for BATCH_SOURCE: %w", err))
+		}
 	}
 
 	var fname = os.Getenv("HOST_KEY_FILE")
 	if fname == "" {
-		slog.Error("HOST_KEY_FILE must be set")
-		os.Exit(1)
+		errList = append(errList, errors.New("HOST_KEY_FILE must be set"))
+	} else {
+		HostKeySigner, err = readKey(fname)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("HOST_KEY_FILE is invalid or cannot be read: %w", err))
+		}
 	}
-	HostKeySigner, err = readKey(fname)
-	if err != nil {
-		slog.Error("HOST_KEY_FILE is invalid or cannot be read", "error", err)
+
+	if len(errList) > 0 {
+		for _, err := range errList {
+			fmt.Fprintf(os.Stderr, " - %s\n", err)
+		}
 		os.Exit(1)
 	}
 }
