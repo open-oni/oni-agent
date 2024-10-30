@@ -50,6 +50,7 @@ export BA_BIND=":2222"
 export BATCH_SOURCE="/mnt/news/production-batches"
 export ONI_LOCATION="/opt/openoni/"
 export HOST_KEY_FILE="/etc/oni-agent"
+export DB_CONNECTION="user:password@tcp(127.0.0.1:3306)/databasename"
 make
 ./bin/agent
 ```

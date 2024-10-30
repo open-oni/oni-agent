@@ -5,9 +5,10 @@
 
 [Service]
   Environment="BA_BIND=:2222"
-  Environment="BATCH_SOURCE=/mnt/news/production-batches"
   Environment="ONI_LOCATION=/opt/openoni/"
+  Environment="BATCH_SOURCE=/mnt/news/production-batches"
   Environment="HOST_KEY_FILE=/etc/oni-agent"
+  Environment="DB_CONNECTION=user:password@tcp(127.0.0.1:3306)/databasename"
   Type=simple
   ExecStart=/usr/local/oni-agent/agent
   SyslogIdentifier=oni-agent
