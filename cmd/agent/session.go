@@ -103,9 +103,13 @@ func (s session) handle() {
 		s.purgeBatch(args[0])
 
 	case "ensure-awardee":
-		if len(args) != 2 {
-			s.respond(StatusError, fmt.Sprintf("%q requires two args: MARC org code and awardee name", command), nil)
+		if len(args) < 1 || len(args) > 2 {
+			s.respond(StatusError, fmt.Sprintf("%q requires one or two args: MARC org code and awardee name. Name is required if the awardee is to be auto-created.", command), nil)
 			return
+		}
+
+		if len(args) == 1 {
+			args = []string{args[0], ""}
 		}
 		s.ensureAwardee(args[0], args[1])
 
@@ -222,7 +226,12 @@ func (s session) ensureAwardee(code string, name string) {
 		return
 	}
 
-	// No rows, but no error: create the awardee
+	// No rows, no error: if a name was given, create the awardee, otherwise abort
+	if name == "" {
+		s.respond(StatusError, "Unable to create awardee", H{"error": "awardee name must be given to auto-create awardees", "org_code": code, "name": name})
+		return
+	}
+
 	var result sql.Result
 	result, err = dbPool.Exec("INSERT INTO core_awardee (`org_code`, `name`, `created`) VALUES(?, ?, NOW())", code, name)
 	if err != nil {
