@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"database/sql"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"sync/atomic"
 
 	gliderssh "github.com/gliderlabs/ssh"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 	"golang.org/x/crypto/ssh"
@@ -35,48 +37,78 @@ var HostKeySigner ssh.Signer
 // background jobs, providing status of existing jobs, etc.
 var JobRunner *queue.Queue
 
+// dbPool is our single DB connection shared app-wide
+var dbPool *sql.DB
+
 func getEnvironment() {
+	var errList []error
+	var err error
+
 	BABind = os.Getenv("BA_BIND")
 	if BABind == "" {
-		slog.Error("BA_BIND must be set")
-		os.Exit(1)
+		errList = append(errList, errors.New("BA_BIND must be set"))
 	}
 
 	ONILocation = os.Getenv("ONI_LOCATION")
-
-	var info, err = os.Stat(ONILocation)
-	if err == nil {
-		if !info.IsDir() {
-			err = errors.New("not a valid directory")
+	if ONILocation == "" {
+		errList = append(errList, errors.New("ONI_LOCATION must be set"))
+	} else {
+		var info, err = os.Stat(ONILocation)
+		if err == nil {
+			if !info.IsDir() {
+				err = errors.New("not a valid directory")
+			}
 		}
-	}
-	if err != nil {
-		slog.Error("Invalid setting for ONI_LOCATION", "error", err)
-		os.Exit(1)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("Invalid setting for ONI_LOCATION: %w", err))
+		}
 	}
 
 	BatchSource = os.Getenv("BATCH_SOURCE")
-	info, err = os.Stat(BatchSource)
-	if err == nil {
-		if !info.IsDir() {
-			err = errors.New("not a valid directory")
+	if BatchSource == "" {
+		errList = append(errList, errors.New("BATCH_SOURCE must be set"))
+	} else {
+		var info, err = os.Stat(BatchSource)
+		if err == nil {
+			if !info.IsDir() {
+				err = errors.New("not a valid directory")
+			}
 		}
-	}
-	if err != nil {
-		slog.Error("Invalid setting for BATCH_SOURCE", "error", err)
-		os.Exit(1)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("Invalid setting for BATCH_SOURCE: %w", err))
+		}
 	}
 
 	var fname = os.Getenv("HOST_KEY_FILE")
 	if fname == "" {
-		slog.Error("HOST_KEY_FILE must be set")
+		errList = append(errList, errors.New("HOST_KEY_FILE must be set"))
+	} else {
+		HostKeySigner, err = readKey(fname)
+		if err != nil {
+			errList = append(errList, fmt.Errorf("HOST_KEY_FILE is invalid or cannot be read: %w", err))
+		}
+	}
+
+	var connect = os.Getenv("DB_CONNECTION")
+	if connect == "" {
+		errList = append(errList, errors.New(`DB_CONNECTION must be set (e.g., "user:pass@tcp(127.0.0.1:3306)/dbname")`))
+	} else {
+		dbPool, err = sql.Open("mysql", connect)
+		if err != nil {
+			errList = append(errList, fmt.Errorf(`DB_CONNECTION is invalid: %w`, err))
+		}
+	}
+
+	if len(errList) > 0 {
+		for _, err := range errList {
+			fmt.Fprintf(os.Stderr, " - %s\n", err)
+		}
 		os.Exit(1)
 	}
-	HostKeySigner, err = readKey(fname)
-	if err != nil {
-		slog.Error("HOST_KEY_FILE is invalid or cannot be read", "error", err)
-		os.Exit(1)
-	}
+
+	dbPool.SetConnMaxLifetime(0)
+	dbPool.SetMaxIdleConns(3)
+	dbPool.SetMaxOpenConns(3)
 }
 
 func readKey(keyfile string) (ssh.Signer, error) {
@@ -155,6 +187,7 @@ func main() {
 	trapIntTerm(func() {
 		cancel()
 		srv.Close()
+		dbPool.Close()
 	})
 	go JobRunner.Wait(ctx)
 
