@@ -120,7 +120,13 @@ func (s session) handle() {
 }
 
 func (s session) loadBatch(name string) {
-	s.queueJob("load_batch", filepath.Join(BatchSource, name))
+	var batchPath = filepath.Join(BatchSource, name)
+	var err = validateBatch(batchPath)
+	if err != nil {
+		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
+		return
+	}
+	s.queueJob("load_batch", batchPath)
 }
 
 func (s session) purgeBatch(name string) {

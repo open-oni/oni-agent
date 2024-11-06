@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<batch xmlns:ndnp="http://www.loc.gov/ndnp" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/ndnp" name="batch_valid_blah">
+
+ <issue lccn="sn96088440" issueDate="1902-11-22" editionOrder="1" >./1902112201.xml</issue>
+ <issue lccn="sn96088441" issueDate="1903-01-11" editionOrder="1" >./1903011101.xml</issue>
+ <issue lccn="sn96088442" issueDate="1902-11-29" editionOrder="1" >./1902112901.xml</issue>
+ <issue lccn="sn96088442" issueDate="1903-01-24" editionOrder="1" >./1903012401.xml</issue>
+</batch>
