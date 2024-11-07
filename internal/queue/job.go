@@ -23,7 +23,7 @@ const (
 
 // Job represents a single ONI management job to be run
 type Job struct {
-	id          uint64
+	id          int64
 	status      JobStatus
 	cmd         *exec.Cmd
 	args        []string
@@ -79,7 +79,7 @@ func (j *Job) wait() error {
 }
 
 // ID returns the job's assigned ID number
-func (j *Job) ID() uint64 {
+func (j *Job) ID() int64 {
 	return j.id
 }
 

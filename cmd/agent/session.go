@@ -14,11 +14,11 @@ import (
 	"github.com/open-oni/oni-agent/internal/version"
 )
 
-var sessionID atomic.Uint64
+var sessionID atomic.Int64
 
 type session struct {
 	ssh.Session
-	id uint64
+	id int64
 }
 
 // Status is a string type the handler's "status" JSON may return
@@ -157,7 +157,7 @@ func (s session) purgeBatch(name string) {
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
-	var id, _ = strconv.ParseUint(arg, 10, 64)
+	var id, _ = strconv.ParseInt(arg, 10, 64)
 	if id == 0 {
 		s.respond(StatusError, fmt.Sprintf("%q is not a valid job id", arg), nil)
 		return nil, false
