@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"os"
@@ -19,6 +20,30 @@ type issue struct {
 type batch struct {
 	Name   string   `xml:"name,attr"`
 	Issues []*issue `xml:"issue"`
+}
+
+// checkBatch just does a very brief DB check to see if a batch by the given
+// name already exists
+func checkBatch(name string) (exists bool, err error) {
+	var rows *sql.Rows
+	rows, err = dbPool.Query("SELECT COUNT(*) FROM core_batch WHERE name = ?", name)
+	if err != nil {
+		return false, fmt.Errorf("querying database: %w", err)
+	}
+	defer rows.Close()
+
+	// What does it mean if there's no error reported, but no count returned?
+	if !rows.Next() {
+		return false, fmt.Errorf("no error, but no rows in batch count")
+	}
+
+	var count int
+	err = rows.Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("reading batch count from database: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // validateBatch checks that the path exists, that there's a manifest file, and

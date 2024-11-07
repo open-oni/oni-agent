@@ -120,8 +120,20 @@ func (s session) handle() {
 }
 
 func (s session) loadBatch(name string) {
+	// ONI currently succeeds if a batch is already loaded and we try to load it
+	// again, but this could change, so we explicitly ensure success here
+	var exists, err = checkBatch(name)
+	if err != nil {
+		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
+		return
+	}
+	if exists {
+		s.respondNoJob()
+		return
+	}
+
 	var batchPath = filepath.Join(BatchSource, name)
-	var err = validateBatch(batchPath)
+	err = validateBatch(batchPath)
 	if err != nil {
 		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
 		return
@@ -130,6 +142,17 @@ func (s session) loadBatch(name string) {
 }
 
 func (s session) purgeBatch(name string) {
+	// ONI will fail if you try to purge a batch which doesn't exist, but we want
+	// to return success for idempotence of NCA jobs
+	var exists, err = checkBatch(name)
+	if err != nil {
+		s.respond(StatusError, fmt.Sprintf("%q cannot be purged", name), H{"error": err.Error()})
+		return
+	}
+	if !exists {
+		s.respondNoJob()
+		return
+	}
 	s.queueJob("purge_batch", name)
 }
 
@@ -194,6 +217,10 @@ func (s session) getJobLogs(arg string) {
 		"stderr": j.Stderr(),
 	}}
 	s.respond(StatusSuccess, "", out)
+}
+
+func (s session) respondNoJob() {
+	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": -1}})
 }
 
 func (s session) queueJob(command string, args ...string) {
