@@ -7,15 +7,12 @@ loading/purging commands when requested via a simple API over SSH.
 
 ### Simple almost to a fault
 
-ONI Agent listens on a configured port for ssh connections and runs a batch
-load or purge command based on the request. It doesn't try to parse ONI's logs
-to determine success or failure of a specific command, it just notes whether a
-job ran or not.
-
-Generally, if a command exits successfully, it means ONI had no trouble.
-Unfortunately, the converse isn't always true: for instance, a batch purge will
-return a failure when the batch doesn't exist. This is just how ONI works, and
-we aren't trying to fix that with this tool.
+ONI Agent listens on a configured port for ssh connections and runs ONI
+management commands and database commands based on the request. There are a
+handful of sanity checks to avoid unnecessary / incorrect error responses, but
+generally it doesn't try to get fancy. If a command runs and ONI exits with a
+non-zero status, you'll have to manually view the logs to figure out what to do
+about it.
 
 There's a basic API for getting job statuses and logs, but nothing
 "intelligent" happens under the hood.
@@ -66,27 +63,52 @@ invocation using a standard Linux ssh client is also fine, and can still save
 time compared to remembering all the commands necessary, changing to the right
 directory, etc.
 
-```bash
-# Purge version 1 of "myankeny" and load version 2
-ssh -p2222 nobody@your.oni.host "purge-batch 'batch_oru_myankeny_ver01'"
-ssh -p2222 nobody@your.oni.host "load-batch 'batch_oru_myankeny_ver02'"
-```
+Note that you should always consider quoting values. For most arguments to the
+various agent commands, this isn't necessary, but getting in the habit will
+help when you have a command where one argument is multiple words, such as in
+the case of the `ensure-awardee` command.
 
 The username doesn't matter: ONI Agent doesn't use this for anything. There is
 no password, no ssh keys to worry about, etc. The *connection* is secure, but
 it's up to you to keep the port locked down to internal connections.
 
-If you are asking ONI Agent for actions to be performed, the agent adds the
-jobs to a queue and runs them one at a time in the order they were received.
-This ensures the server won't become unusable in the event several huge batches
-are trying to load at once.
+If you are asking ONI Agent for potentially slow actions to be performed
+(`load-batch` or `purge-batch`), the agent adds the jobs to a queue and runs
+them one at a time in the order they were received. This ensures the server
+won't become unusable in the event several huge batches are trying to load at
+once.
 
 You can use a tool like `jq` to parse the JSON responses returned by the
 server. Your best bet is to look at the code to see what you can expect, but
 you will generally see a job structure that contains an "id" field when a job
 is created. You can use that to request more data.
 
-For instance, a full exchange might look like this:
+Some commands normally return job ids on success, but don't always need to run
+a job. If the agent determines that a job doesn't need to run, the job
+structure will have an `id` field of -1. e.g.:
+
+```json
+{
+  "job": {"id": -1},
+  "message": "No-op: job is redundant or already completed",
+  "status": "success"
+}
+```
+
+[nca]: <https://github.com/uoregon-libraries/newspaper-curation-app>
+
+### Simple Examples
+
+A simple purge-and-reload of a batch would be something like this:
+
+```bash
+# Purge version 1 of "myankeny" and load version 2
+ssh -p2222 nobody@your.oni.host "purge-batch 'batch_oru_myankeny_ver01'"
+ssh -p2222 nobody@your.oni.host "load-batch 'batch_oru_myankeny_ver02'"
+```
+
+A full exchange of kicking off a job and then checking its status, using `jq`
+to examine the responses, might look like this:
 
 ```
 $ ssh -p2222 nobody@localhost "load-batch batch_hillsborohistoricalsociety_20240912H3MahoganyOrcoMammanBehindShrubs_ver01" | jq
@@ -115,9 +137,27 @@ $ ssh -p2222 nobody@localhost "job-status 7" | jq
 }
 ```
 
-Other commands include "job-logs" and "version".
+## Commands
 
-[nca]: <https://github.com/uoregon-libraries/newspaper-curation-app>
+The following commands are currently available:
+
+- `version`: reports the version number of the agent
+- `job-status <job id>`: Reports the status of the given job id: "pending",
+  "started", "couldn't start", "successful", or "failed"
+- `job-logs <job id>`: Reports the full list of a command's logs, with
+  timestamps added for clarity
+- `load-batch <batch name>`: Creates a job to load the named batch, using the
+  configured batch path combined with the batch name to find it on disk. The
+  return includes a job ID for monitoring its status. A job ID of -1 indicates
+  the batch doesn't need to be loaded (it's already been loaded).
+- `purge-batch <batch name>`: Purges the named batch. The return includes a job
+  ID for monitoring its status. If the ID is -1 it means there's no task to
+  perform, most likely the batch doesn't exist, so there's nothing to purge.
+- `ensure-awardee <MARC Org Code> <Full awardee name>`: Checks if the given
+  code exists in the `core_awardee` table. If it does, success is returned. If
+  it doesn't, and full awardee name was given, the awardee is created and
+  success is returned. If it doesn't exist and no name was given, the agent
+  will return failure.
 
 ## Why?
 
