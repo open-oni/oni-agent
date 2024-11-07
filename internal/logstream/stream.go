@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Log holds a single log entry and records the time it was captured
 type Log struct {
 	Timestamp time.Time
 	Value     string
@@ -25,6 +26,7 @@ func (l Log) String() string {
 	return log
 }
 
+// Stream holds a list of Logs captured from some output stream
 type Stream struct {
 	Logs        []Log
 	lastWrite   time.Time

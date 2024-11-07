@@ -1,3 +1,5 @@
+// Package main shouldn't need a comment, but revive is *really* strict. Bro,
+// this is obviously a "main" package, which means it's a command. Come on.
 package main
 
 import (
@@ -11,7 +13,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync/atomic"
+	"time"
 
 	gliderssh "github.com/gliderlabs/ssh"
 	_ "github.com/go-sql-driver/mysql"
@@ -190,6 +194,26 @@ func main() {
 		dbPool.Close()
 	})
 	go JobRunner.Wait(ctx)
+
+	// This gives us a good fake job for operations where we have to return a job
+	// ID but don't actually need to run a real job. It also functions as an
+	// on-startup sanity check that the agent can in fact call ONI commands.
+	slog.Info("Checking ONI install")
+	var id = JobRunner.NewJob("check")
+	var j = JobRunner.GetJob(id)
+	for j.Status() == queue.StatusPending || j.Status() == queue.StatusStarted {
+		time.Sleep(time.Millisecond * 100)
+		j = JobRunner.GetJob(id)
+	}
+	switch j.Status() {
+	case queue.StatusSuccessful:
+		slog.Info("ONI check successful")
+	case queue.StatusFailStart, queue.StatusFailed:
+		slog.Error("ONI check failed", "error", strings.Join(j.Stderr(), ", "))
+	default:
+		slog.Error("Unhandled job status for ONI check job, terminating", "status", j.Status())
+		os.Exit(1)
+	}
 
 	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
 	var err = srv.ListenAndServe()
