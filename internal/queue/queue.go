@@ -1,3 +1,5 @@
+// Package queue manages a simple in-memory job queue for spawning, running,
+// and storing logs from ONI management commands
 package queue
 
 import (
@@ -55,6 +57,8 @@ func New(oniPath string) *Queue {
 	return q
 }
 
+// NewJob queues up a new ONI management command from the given args, and
+// returns the queued job's id
 func (q *Queue) NewJob(args ...string) uint64 {
 	q.m.Lock()
 	defer q.m.Unlock()

@@ -1,3 +1,5 @@
+// Package main shouldn't need a comment, but revive is *really* strict. Bro,
+// this is obviously a "main" package, which means it's a command. Come on.
 package main
 
 import (
