@@ -163,6 +163,13 @@ func (s session) getJob(arg string) (job *queue.Job, found bool) {
 		return nil, false
 	}
 
+	// Allow fake jobs to get a response instead of an error so that automations
+	// that haven't accounted for "no job needed" responses don't fail
+	var noop = queue.NoOpJob()
+	if id == noop.ID() {
+		return noop, true
+	}
+
 	var j = JobRunner.GetJob(id)
 	if j == nil {
 		s.respond(StatusError, "Job not found", H{"job": H{"id": id}})
@@ -220,7 +227,7 @@ func (s session) getJobLogs(arg string) {
 }
 
 func (s session) respondNoJob() {
-	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": -1}})
+	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": queue.NoOpJob().ID()}})
 }
 
 func (s session) queueJob(command string, args ...string) {

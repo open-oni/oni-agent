@@ -36,6 +36,25 @@ type Job struct {
 	pid         int
 }
 
+var noopJob = &Job{
+	id:          -1,
+	status:      StatusSuccessful,
+	cmd:         nil,
+	args:        nil,
+	queuedAt:    time.Now(),
+	startedAt:   time.Now(),
+	completedAt: time.Now(),
+	err:         nil,
+	stdout:      logstream.Stream{},
+	stderr:      logstream.Stream{},
+	pid:         -1,
+}
+
+// NoOpJob returns a job that does nothing and has a success status
+func NoOpJob() *Job {
+	return noopJob
+}
+
 // start creates the command with the given context, starting the command and
 // storing its pid and start time. After calling start, wait must then be
 // called to let the command finish and release resources.
