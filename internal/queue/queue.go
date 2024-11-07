@@ -15,8 +15,8 @@ import (
 // Queue holds the list of ONI jobs we need to run
 type Queue struct {
 	m       sync.Mutex
-	seq     uint64
-	lookup  map[uint64]*Job
+	seq     int64
+	lookup  map[int64]*Job
 	binpath string
 	env     []string
 	queue   chan *Job
@@ -25,7 +25,7 @@ type Queue struct {
 // New provides a new job queue
 func New(oniPath string) *Queue {
 	var binpath = filepath.Join(oniPath, "manage.py")
-	var q = &Queue{lookup: make(map[uint64]*Job), queue: make(chan *Job, 1000), binpath: binpath}
+	var q = &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000), binpath: binpath}
 
 	// We store the env vars needed to emulate Python's virtual environment,
 	// which essentially operates by setting three env vars. There's other stuff
@@ -59,7 +59,7 @@ func New(oniPath string) *Queue {
 
 // NewJob queues up a new ONI management command from the given args, and
 // returns the queued job's id
-func (q *Queue) NewJob(args ...string) uint64 {
+func (q *Queue) NewJob(args ...string) int64 {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -77,7 +77,7 @@ func (q *Queue) NewJob(args ...string) uint64 {
 }
 
 // GetJob returns a job by its id
-func (q *Queue) GetJob(id uint64) *Job {
+func (q *Queue) GetJob(id int64) *Job {
 	return q.lookup[id]
 }
 

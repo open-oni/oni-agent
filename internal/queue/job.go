@@ -23,7 +23,7 @@ const (
 
 // Job represents a single ONI management job to be run
 type Job struct {
-	id          uint64
+	id          int64
 	status      JobStatus
 	cmd         *exec.Cmd
 	args        []string
@@ -34,6 +34,25 @@ type Job struct {
 	stdout      logstream.Stream
 	stderr      logstream.Stream
 	pid         int
+}
+
+var noopJob = &Job{
+	id:          -1,
+	status:      StatusSuccessful,
+	cmd:         nil,
+	args:        nil,
+	queuedAt:    time.Now(),
+	startedAt:   time.Now(),
+	completedAt: time.Now(),
+	err:         nil,
+	stdout:      logstream.Stream{},
+	stderr:      logstream.Stream{},
+	pid:         -1,
+}
+
+// NoOpJob returns a job that does nothing and has a success status
+func NoOpJob() *Job {
+	return noopJob
 }
 
 // start creates the command with the given context, starting the command and
@@ -79,7 +98,7 @@ func (j *Job) wait() error {
 }
 
 // ID returns the job's assigned ID number
-func (j *Job) ID() uint64 {
+func (j *Job) ID() int64 {
 	return j.id
 }
 

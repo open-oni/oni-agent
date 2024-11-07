@@ -178,7 +178,7 @@ func main() {
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)
 
-	var sessionID atomic.Uint64
+	var sessionID atomic.Int64
 	srv.Handle(func(_s gliderssh.Session) {
 		var s = session{Session: _s, id: sessionID.Add(1)}
 
