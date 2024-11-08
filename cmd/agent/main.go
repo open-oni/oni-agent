@@ -34,6 +34,9 @@ var ONILocation string
 // BatchSource is where batches can be found, necessary for the "load" command
 var BatchSource string
 
+// HostKeyFile is the path to the ssh key
+var HostKeyFile string
+
 // HostKeySigner is used for the ssh key presented to clients
 var HostKeySigner ssh.Signer
 
@@ -83,11 +86,11 @@ func getEnvironment() {
 		}
 	}
 
-	var fname = os.Getenv("HOST_KEY_FILE")
-	if fname == "" {
+	HostKeyFile = os.Getenv("HOST_KEY_FILE")
+	if HostKeyFile == "" {
 		errList = append(errList, errors.New("HOST_KEY_FILE must be set"))
 	} else {
-		HostKeySigner, err = readKey(fname)
+		HostKeySigner, err = readKey(HostKeyFile)
 		if err != nil {
 			errList = append(errList, fmt.Errorf("HOST_KEY_FILE is invalid or cannot be read: %w", err))
 		}
@@ -215,7 +218,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
+	slog.Info("starting ssh server",
+		"port", BABind,
+		"ONI_LOCATION", ONILocation,
+		"BATCH_SOURCE", BatchSource,
+		"HOST_KEY_FILE", HostKeyFile,
+		"version", version.Version,
+	)
 	var err = srv.ListenAndServe()
 	if err != nil && err != gliderssh.ErrServerClosed {
 		slog.Error("Unable to serve SSH", "error", err)
