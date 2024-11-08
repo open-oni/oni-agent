@@ -56,35 +56,26 @@ func getEnvironment() {
 		errList = append(errList, errors.New("BA_BIND must be set"))
 	}
 
-	ONILocation = os.Getenv("ONI_LOCATION")
-	if ONILocation == "" {
-		errList = append(errList, errors.New("ONI_LOCATION must be set"))
-	} else {
-		var info, err = os.Stat(ONILocation)
-		if err == nil {
-			if !info.IsDir() {
-				err = errors.New("not a valid directory")
+	var envDir = func(env string) string {
+		var dir = os.Getenv(env)
+		if dir == "" {
+			errList = append(errList, fmt.Errorf("%s must be set", env))
+		} else {
+			var info, err = os.Stat(dir)
+			if err == nil {
+				if !info.IsDir() {
+					err = errors.New("not a valid directory")
+				}
+			}
+			if err != nil {
+				errList = append(errList, fmt.Errorf("Invalid setting for %s: %w", env, err))
 			}
 		}
-		if err != nil {
-			errList = append(errList, fmt.Errorf("Invalid setting for ONI_LOCATION: %w", err))
-		}
+		return dir
 	}
 
-	BatchSource = os.Getenv("BATCH_SOURCE")
-	if BatchSource == "" {
-		errList = append(errList, errors.New("BATCH_SOURCE must be set"))
-	} else {
-		var info, err = os.Stat(BatchSource)
-		if err == nil {
-			if !info.IsDir() {
-				err = errors.New("not a valid directory")
-			}
-		}
-		if err != nil {
-			errList = append(errList, fmt.Errorf("Invalid setting for BATCH_SOURCE: %w", err))
-		}
-	}
+	ONILocation = envDir("ONI_LOCATION")
+	BatchSource = envDir("BATCH_SOURCE")
 
 	HostKeyFile = os.Getenv("HOST_KEY_FILE")
 	if HostKeyFile == "" {
