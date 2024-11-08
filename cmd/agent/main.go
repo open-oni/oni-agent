@@ -171,6 +171,7 @@ func main() {
 
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)
+	srv.MaxTimeout = time.Duration(5 * time.Minute)
 
 	var sessionID atomic.Int64
 	srv.Handle(func(_s gliderssh.Session) {
