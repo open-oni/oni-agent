@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
+	"github.com/uoregon-libraries/gopkg/xmlnode"
 )
 
 var sessionID atomic.Int64
@@ -149,7 +151,14 @@ func (s session) sendMARC(lccn string) {
 		}
 	}
 
-	// TODO: Parse the data to get the title and LCCN
+	// Parse the data to ensure it's valid
+	var node = &xmlnode.Node{}
+	var err = xml.Unmarshal(marcData, node)
+	if err != nil {
+		slog.Error("Invalid XML", "marc", string(marcData), "error", err)
+		s.respond(StatusError, "Invalid data", H{"error": err.Error()})
+		return
+	}
 
 	// TODO: Save XML file then tell ONI to try loading it
 
