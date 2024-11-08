@@ -71,6 +71,13 @@ func (s session) handle() {
 
 	var command, args = parts[0], parts[1:]
 	switch command {
+	case "send-marc":
+		if len(args) != 1 {
+			s.respond(StatusError, "You must supply an LCCN", nil)
+			return
+		}
+		s.sendMARC(args[0])
+
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 
@@ -117,6 +124,37 @@ func (s session) handle() {
 		s.respond(StatusError, fmt.Sprintf("%q is not a valid command name", command), nil)
 		return
 	}
+}
+
+func (s session) sendMARC(lccn string) {
+	// Create a ~100k data-receiving buffer
+	var data = make([]byte, 100_000)
+
+	var marcData []byte
+	for {
+		var n, err = s.Read(data)
+		if err != nil {
+			slog.Error("Unable to read from client", "error", err)
+			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
+			return
+		}
+		var got = data[:n]
+		slog.Info("Got data", "size", n, "data", string(data[:n]))
+
+		marcData = append(marcData, got...)
+		var l = len(marcData)
+		if l > 6 && string(marcData[l-6:]) == "\n\nEND\n" {
+			marcData = marcData[:l-6]
+			break
+		}
+	}
+
+	// TODO: Parse the data to get the title and LCCN
+
+	// TODO: Save XML file then tell ONI to try loading it
+
+	slog.Info("Received data", "marc", string(marcData))
+	s.respond(StatusSuccess, "MARC XML Received", nil)
 }
 
 func (s session) loadBatch(name string) {
