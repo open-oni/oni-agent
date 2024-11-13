@@ -8,6 +8,11 @@ bin:
 test:
 	go test ./...
 
+.PHONY: lint
+lint:
+	revive ./...
+	go vet ./...
+
 .PHONY: clean
 clean:
 	rm -f bin/*
