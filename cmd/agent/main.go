@@ -193,7 +193,7 @@ func main() {
 	// This functions as an on-startup sanity check to verify that the agent can
 	// in fact call ONI commands with its current configuration
 	slog.Info("Checking ONI install")
-	var id = JobRunner.NewJob("check")
+	var id = JobRunner.QueueJob("check")
 	var j = JobRunner.GetJob(id)
 	for j.Status() == queue.StatusPending || j.Status() == queue.StatusStarted {
 		time.Sleep(time.Millisecond * 100)

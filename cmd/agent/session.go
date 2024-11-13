@@ -279,7 +279,7 @@ func (s session) respondNoJob() {
 
 func (s session) queueJob(command string, args ...string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.NewJob(combined...)
+	var id = JobRunner.QueueJob(combined...)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 }

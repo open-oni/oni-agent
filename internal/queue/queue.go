@@ -57,9 +57,9 @@ func New(oniPath string) *Queue {
 	return q
 }
 
-// NewJob queues up a new ONI management command from the given args, and
+// QueueJob queues up a new ONI management command from the given args, and
 // returns the queued job's id
-func (q *Queue) NewJob(args ...string) int64 {
+func (q *Queue) QueueJob(args ...string) int64 {
 	q.m.Lock()
 	defer q.m.Unlock()
 
