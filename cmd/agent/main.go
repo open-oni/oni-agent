@@ -190,9 +190,8 @@ func main() {
 	})
 	go JobRunner.Wait(ctx)
 
-	// This gives us a good fake job for operations where we have to return a job
-	// ID but don't actually need to run a real job. It also functions as an
-	// on-startup sanity check that the agent can in fact call ONI commands.
+	// This functions as an on-startup sanity check to verify that the agent can
+	// in fact call ONI commands with its current configuration
 	slog.Info("Checking ONI install")
 	var id = JobRunner.NewJob("check")
 	var j = JobRunner.GetJob(id)
