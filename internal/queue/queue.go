@@ -57,19 +57,26 @@ func New(oniPath string) *Queue {
 	return q
 }
 
-// QueueJob queues up a new ONI management command from the given args, and
-// returns the queued job's id
-func (q *Queue) QueueJob(args ...string) int64 {
+// NewJob returns a Job set up to call ONI with the given args
+func (q *Queue) NewJob(args ...string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
 	q.seq++
-	var j = &Job{
-		args:     args,
-		id:       q.seq,
-		status:   StatusPending,
-		queuedAt: time.Now(),
+	return &Job{
+		bin:    q.binpath,
+		env:    q.env,
+		args:   args,
+		id:     q.seq,
+		status: StatusPending,
 	}
+}
+
+// QueueJob queues up a new ONI management command from the given args, and
+// returns the queued job's id
+func (q *Queue) QueueJob(args ...string) int64 {
+	var j = q.NewJob(args...)
+	j.queuedAt = time.Now()
 	q.lookup[j.id] = j
 	q.queue <- j
 
@@ -94,16 +101,19 @@ func (q *Queue) Wait(ctx context.Context) {
 	}
 }
 
+// run kicks off an ONI management process for the job `j` within a given
+// context. Nothing is returned, as the job's status and logs are expected to
+// be used to determine success/failure.
 func (q *Queue) run(ctx context.Context, j *Job) {
 	var logger = slog.With("id", j.id, "command", j.args)
-	var err = j.start(ctx, q.binpath, q.env)
+	var err = j.Start(ctx)
 	if err != nil {
 		logger.Error("Unable to start job", "error", err)
 		return
 	}
 
 	logger.Info("Started job")
-	err = j.wait()
+	err = j.Wait()
 	if err != nil {
 		logger.Error("Job failed", "error", err)
 		return

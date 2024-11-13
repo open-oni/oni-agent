@@ -26,7 +26,9 @@ type Job struct {
 	id          int64
 	status      JobStatus
 	cmd         *exec.Cmd
+	bin         string
 	args        []string
+	env         []string
 	queuedAt    time.Time
 	startedAt   time.Time
 	completedAt time.Time
@@ -53,14 +55,14 @@ func NoOpJob() *Job {
 	}
 }
 
-// start creates the command with the given context, starting the command and
+// Start creates the command with the given context, starting the command and
 // storing its pid and start time. After calling start, wait must then be
 // called to let the command finish and release resources.
-func (j *Job) start(ctx context.Context, binpath string, env []string) error {
-	j.cmd = exec.CommandContext(ctx, binpath, j.args...)
+func (j *Job) Start(ctx context.Context) error {
+	j.cmd = exec.CommandContext(ctx, j.bin, j.args...)
 	j.cmd.Stdout = &j.stdout
 	j.cmd.Stderr = &j.stderr
-	j.cmd.Env = env
+	j.cmd.Env = j.env
 
 	j.err = j.cmd.Start()
 	if j.err != nil {
@@ -76,7 +78,7 @@ func (j *Job) start(ctx context.Context, binpath string, env []string) error {
 
 // wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
 // copying to complete, setting the completed time if successful.
-func (j *Job) wait() error {
+func (j *Job) Wait() error {
 	if j.err != nil {
 		return fmt.Errorf("waiting for job completion: cannot start due to previous error: %w", j.err)
 	}
@@ -93,6 +95,16 @@ func (j *Job) wait() error {
 	j.status = StatusSuccessful
 	j.completedAt = time.Now()
 	return nil
+}
+
+// Run starts the job and waits for it to complete
+func (j *Job) Run(ctx context.Context) error {
+	var err = j.Start(ctx)
+	if err == nil {
+		err = j.Wait()
+	}
+
+	return err
 }
 
 // ID returns the job's assigned ID number
