@@ -75,12 +75,12 @@ func (s session) handle() {
 
 	var command, args = parts[0], parts[1:]
 	switch command {
-	case "send-marc":
+	case "load-title":
 		if len(args) != 1 {
 			s.respond(StatusError, "You must supply an LCCN", nil)
 			return
 		}
-		s.sendMARC(args[0])
+		s.loadTitle(args[0])
 
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
@@ -130,7 +130,7 @@ func (s session) handle() {
 	}
 }
 
-func (s session) sendMARC(lccn string) {
+func (s session) loadTitle(lccn string) {
 	// Create a ~100k data-receiving buffer
 	var data = make([]byte, 100_000)
 
