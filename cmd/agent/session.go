@@ -176,7 +176,7 @@ func (s session) sendMARC(lccn string) {
 	var fpath = filepath.Join(dir, "marc.xml")
 	err = os.WriteFile(fpath, marcData, 0600)
 	if err != nil {
-		slog.Error("Unable to write MARX XML", "path", fpath, "error", err)
+		slog.Error("Unable to write MARC XML", "path", fpath, "error", err)
 		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
 		return
 	}
