@@ -139,7 +139,13 @@ func (s session) loadTitle() {
 			return
 		}
 		var got = data[:n]
-		slog.Info("Got data", "size", n, "data", string(data[:n]))
+		var reported string
+		if n > 1200 {
+			reported = string(data[:1000])+"..."+string(data[n-190:n])
+		} else {
+			reported = string(got)
+		}
+		slog.Info("Got data", "size", n, "data", reported)
 
 		marcData = append(marcData, got...)
 		var l = len(marcData)
@@ -153,7 +159,7 @@ func (s session) loadTitle() {
 	var node = &xmlnode.Node{}
 	var err = xml.Unmarshal(marcData, node)
 	if err != nil {
-		slog.Error("Invalid XML", "marc", string(marcData), "error", err)
+		slog.Error("Invalid XML", "error", err)
 		s.respond(StatusError, "Invalid data", H{"error": err.Error()})
 		return
 	}
