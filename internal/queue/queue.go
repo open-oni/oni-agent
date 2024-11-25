@@ -62,13 +62,16 @@ func (q *Queue) NewJob(args ...string) *Job {
 	defer q.m.Unlock()
 
 	q.seq++
-	return &Job{
+	var j = &Job{
 		bin:    q.binpath,
 		env:    q.env,
 		args:   args,
 		id:     q.seq,
 		status: StatusPending,
 	}
+	q.lookup[j.id] = j
+
+	return j
 }
 
 // QueueJob queues up a new ONI management command from the given args, and
@@ -76,7 +79,6 @@ func (q *Queue) NewJob(args ...string) *Job {
 func (q *Queue) QueueJob(args ...string) int64 {
 	var j = q.NewJob(args...)
 	j.queuedAt = time.Now()
-	q.lookup[j.id] = j
 	q.queue <- j
 
 	return j.id
