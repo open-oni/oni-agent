@@ -4,7 +4,6 @@ package queue
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,29 +93,11 @@ func (q *Queue) Wait(ctx context.Context) {
 	for {
 		select {
 		case j := <-q.queue:
-			q.run(ctx, j)
+			// We ignore errors here, as they're already logged by the job itself,
+			// and nothing can be done about them anyway
+			_ = j.Run(ctx)
 		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-// run kicks off an ONI management process for the job `j` within a given
-// context. Nothing is returned, as the job's status and logs are expected to
-// be used to determine success/failure.
-func (q *Queue) run(ctx context.Context, j *Job) {
-	var logger = slog.With("id", j.id, "command", j.args)
-	var err = j.Start(ctx)
-	if err != nil {
-		logger.Error("Unable to start job", "error", err)
-		return
-	}
-
-	logger.Info("Started job")
-	err = j.Wait()
-	if err != nil {
-		logger.Error("Job failed", "error", err)
-		return
-	}
-	logger.Info("Job complete")
 }

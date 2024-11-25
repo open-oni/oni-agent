@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"time"
 
@@ -63,13 +64,17 @@ func (j *Job) Start(ctx context.Context) error {
 	j.cmd.Stdout = &j.stdout
 	j.cmd.Stderr = &j.stderr
 	j.cmd.Env = j.env
+	var logger = slog.With("id", j.id, "command", j.args)
 
+	logger.Info("Starting job", "id", j.id, "command", j.args)
 	j.err = j.cmd.Start()
 	if j.err != nil {
+		logger.Error("Unable to start job", "error", j.err)
 		j.status = StatusFailStart
 		return j.err
 	}
 	j.status = StatusStarted
+	logger.Info("Job started successfully", "id", j.id, "command", j.args)
 
 	j.startedAt = time.Now()
 	j.pid = j.cmd.Process.Pid
@@ -79,21 +84,27 @@ func (j *Job) Start(ctx context.Context) error {
 // wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
 // copying to complete, setting the completed time if successful.
 func (j *Job) Wait() error {
+	var logger = slog.With("id", j.id, "command", j.args)
+
 	if j.err != nil {
+		logger.Error("Invalid job state in Job.Wait: job already has an error from a previous operation", "error", j.err)
 		return fmt.Errorf("waiting for job completion: cannot start due to previous error: %w", j.err)
 	}
 	if j.startedAt.IsZero() {
+		logger.Error("Invalid job state in Job.Wait: job has not been started", "error", j.err)
 		return fmt.Errorf("waiting for job completion: Start must first be called")
 	}
 
 	j.err = j.cmd.Wait()
 	if j.err != nil {
+		logger.Error("Job failed", "error", j.err)
 		j.status = StatusFailed
 		return j.err
 	}
 
 	j.status = StatusSuccessful
 	j.completedAt = time.Now()
+	logger.Info("Job complete")
 	return nil
 }
 
