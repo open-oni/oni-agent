@@ -55,6 +55,7 @@ func checkBatch(name string) (exists bool, err error) {
 // the DVV stuff chronam batches had, and validates XML doesn't give us
 // anything that isn't in the main file anyway.
 func validateBatch(batchPath string) error {
+	batchPath = filepath.Join(batchPath, "data")
 	var xmlfile = filepath.Join(batchPath, "batch.xml")
 	var data, err = os.ReadFile(xmlfile)
 	if err != nil {
