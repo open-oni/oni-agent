@@ -69,10 +69,7 @@ func validateBatch(batchPath string) error {
 	}
 
 	for _, i := range b.Issues {
-		var fp = i.Filepath
-		if fp[0] == '.' {
-			fp = filepath.Join(batchPath, fp)
-		}
+		var fp = filepath.Join(batchPath, i.Filepath)
 		var info, err = os.Stat(fp)
 		if err != nil {
 			return fmt.Errorf("checking issue file %s: %w", fp, err)
