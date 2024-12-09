@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"time"
 
@@ -26,7 +27,9 @@ type Job struct {
 	id          int64
 	status      JobStatus
 	cmd         *exec.Cmd
+	bin         string
 	args        []string
+	env         []string
 	queuedAt    time.Time
 	startedAt   time.Time
 	completedAt time.Time
@@ -36,40 +39,42 @@ type Job struct {
 	pid         int
 }
 
-var noopJob = &Job{
-	id:          -1,
-	status:      StatusSuccessful,
-	cmd:         nil,
-	args:        nil,
-	queuedAt:    time.Now(),
-	startedAt:   time.Now(),
-	completedAt: time.Now(),
-	err:         nil,
-	stdout:      logstream.Stream{},
-	stderr:      logstream.Stream{},
-	pid:         -1,
-}
-
 // NoOpJob returns a job that does nothing and has a success status
 func NoOpJob() *Job {
-	return noopJob
+	return &Job{
+		id:          -1,
+		status:      StatusSuccessful,
+		cmd:         nil,
+		args:        nil,
+		queuedAt:    time.Now(),
+		startedAt:   time.Now(),
+		completedAt: time.Now(),
+		err:         nil,
+		stdout:      logstream.Stream{},
+		stderr:      logstream.Stream{},
+		pid:         -1,
+	}
 }
 
-// start creates the command with the given context, starting the command and
+// Start creates the command with the given context, starting the command and
 // storing its pid and start time. After calling start, wait must then be
 // called to let the command finish and release resources.
-func (j *Job) start(ctx context.Context, binpath string, env []string) error {
-	j.cmd = exec.CommandContext(ctx, binpath, j.args...)
+func (j *Job) Start(ctx context.Context) error {
+	j.cmd = exec.CommandContext(ctx, j.bin, j.args...)
 	j.cmd.Stdout = &j.stdout
 	j.cmd.Stderr = &j.stderr
-	j.cmd.Env = env
+	j.cmd.Env = j.env
+	var logger = slog.With("id", j.id, "command", j.args)
 
+	logger.Info("Starting job", "id", j.id, "command", j.args)
 	j.err = j.cmd.Start()
 	if j.err != nil {
+		logger.Error("Unable to start job", "error", j.err)
 		j.status = StatusFailStart
 		return j.err
 	}
 	j.status = StatusStarted
+	logger.Info("Job started successfully", "id", j.id, "command", j.args)
 
 	j.startedAt = time.Now()
 	j.pid = j.cmd.Process.Pid
@@ -78,23 +83,39 @@ func (j *Job) start(ctx context.Context, binpath string, env []string) error {
 
 // wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
 // copying to complete, setting the completed time if successful.
-func (j *Job) wait() error {
+func (j *Job) Wait() error {
+	var logger = slog.With("id", j.id, "command", j.args)
+
 	if j.err != nil {
+		logger.Error("Invalid job state in Job.Wait: job already has an error from a previous operation", "error", j.err)
 		return fmt.Errorf("waiting for job completion: cannot start due to previous error: %w", j.err)
 	}
 	if j.startedAt.IsZero() {
+		logger.Error("Invalid job state in Job.Wait: job has not been started", "error", j.err)
 		return fmt.Errorf("waiting for job completion: Start must first be called")
 	}
 
 	j.err = j.cmd.Wait()
 	if j.err != nil {
+		logger.Error("Job failed", "error", j.err)
 		j.status = StatusFailed
 		return j.err
 	}
 
 	j.status = StatusSuccessful
 	j.completedAt = time.Now()
+	logger.Info("Job complete")
 	return nil
+}
+
+// Run starts the job and waits for it to complete
+func (j *Job) Run(ctx context.Context) error {
+	var err = j.Start(ctx)
+	if err == nil {
+		err = j.Wait()
+	}
+
+	return err
 }
 
 // ID returns the job's assigned ID number

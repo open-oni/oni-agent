@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync/atomic"
@@ -12,6 +15,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
+	"github.com/uoregon-libraries/gopkg/xmlnode"
 )
 
 var sessionID atomic.Int64
@@ -71,6 +75,9 @@ func (s session) handle() {
 
 	var command, args = parts[0], parts[1:]
 	switch command {
+	case "load-title":
+		s.loadTitle()
+
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 
@@ -117,6 +124,79 @@ func (s session) handle() {
 		s.respond(StatusError, fmt.Sprintf("%q is not a valid command name", command), nil)
 		return
 	}
+}
+
+func (s session) loadTitle() {
+	// Create a ~100k data-receiving buffer
+	var data = make([]byte, 100_000)
+
+	var marcData []byte
+	for {
+		var n, err = s.Read(data)
+		if err != nil {
+			slog.Error("Unable to read from client", "error", err)
+			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
+			return
+		}
+		var got = data[:n]
+		var reported string
+		if n > 1200 {
+			reported = string(data[:1000])+"..."+string(data[n-190:n])
+		} else {
+			reported = string(got)
+		}
+		slog.Info("Got data", "size", n, "data", reported)
+
+		marcData = append(marcData, got...)
+		var l = len(marcData)
+		if l > 6 && string(marcData[l-6:]) == "\n\nEND\n" {
+			marcData = marcData[:l-6]
+			break
+		}
+	}
+
+	// Parse the data to ensure it's valid
+	var node = &xmlnode.Node{}
+	var err = xml.Unmarshal(marcData, node)
+	if err != nil {
+		slog.Error("Invalid XML", "error", err)
+		s.respond(StatusError, "Invalid data", H{"error": err.Error()})
+		return
+	}
+
+	// Create a self-deleting temp dir
+	var dir string
+	dir, err = os.MkdirTemp("", "*-oni-marc")
+	if err != nil {
+		slog.Error("Unable to create temp dir", "error", err)
+		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
+		return
+	}
+	defer os.Remove(dir)
+
+	// Write the MARC record out and tell ONI to ingest it
+	var fpath = filepath.Join(dir, "marc.xml")
+	err = os.WriteFile(fpath, marcData, 0600)
+	if err != nil {
+		slog.Error("Unable to write MARC XML", "path", fpath, "error", err)
+		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
+		return
+	}
+
+	var j = JobRunner.NewJob("load_titles", dir)
+	err = j.Run(context.Background())
+	if err != nil {
+		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
+		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
+		return
+	}
+
+	// We only remove the file if there were no load errors. This leaves a mess
+	// but also allows debugging.
+	os.Remove(fpath)
+
+	slog.Info("Received data", "marc", string(marcData))
+	s.respond(StatusSuccess, "MARC XML Received", nil)
 }
 
 func (s session) loadBatch(name string) {
@@ -232,7 +312,7 @@ func (s session) respondNoJob() {
 
 func (s session) queueJob(command string, args ...string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.NewJob(combined...)
+	var id = JobRunner.QueueJob(combined...)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 }

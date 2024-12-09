@@ -34,6 +34,9 @@ var ONILocation string
 // BatchSource is where batches can be found, necessary for the "load" command
 var BatchSource string
 
+// HostKeyFile is the path to the ssh key
+var HostKeyFile string
+
 // HostKeySigner is used for the ssh key presented to clients
 var HostKeySigner ssh.Signer
 
@@ -53,41 +56,32 @@ func getEnvironment() {
 		errList = append(errList, errors.New("BA_BIND must be set"))
 	}
 
-	ONILocation = os.Getenv("ONI_LOCATION")
-	if ONILocation == "" {
-		errList = append(errList, errors.New("ONI_LOCATION must be set"))
-	} else {
-		var info, err = os.Stat(ONILocation)
-		if err == nil {
-			if !info.IsDir() {
-				err = errors.New("not a valid directory")
+	var envDir = func(env string) string {
+		var dir = os.Getenv(env)
+		if dir == "" {
+			errList = append(errList, fmt.Errorf("%s must be set", env))
+		} else {
+			var info, err = os.Stat(dir)
+			if err == nil {
+				if !info.IsDir() {
+					err = errors.New("not a valid directory")
+				}
+			}
+			if err != nil {
+				errList = append(errList, fmt.Errorf("Invalid setting for %s: %w", env, err))
 			}
 		}
-		if err != nil {
-			errList = append(errList, fmt.Errorf("Invalid setting for ONI_LOCATION: %w", err))
-		}
+		return dir
 	}
 
-	BatchSource = os.Getenv("BATCH_SOURCE")
-	if BatchSource == "" {
-		errList = append(errList, errors.New("BATCH_SOURCE must be set"))
-	} else {
-		var info, err = os.Stat(BatchSource)
-		if err == nil {
-			if !info.IsDir() {
-				err = errors.New("not a valid directory")
-			}
-		}
-		if err != nil {
-			errList = append(errList, fmt.Errorf("Invalid setting for BATCH_SOURCE: %w", err))
-		}
-	}
+	ONILocation = envDir("ONI_LOCATION")
+	BatchSource = envDir("BATCH_SOURCE")
 
-	var fname = os.Getenv("HOST_KEY_FILE")
-	if fname == "" {
+	HostKeyFile = os.Getenv("HOST_KEY_FILE")
+	if HostKeyFile == "" {
 		errList = append(errList, errors.New("HOST_KEY_FILE must be set"))
 	} else {
-		HostKeySigner, err = readKey(fname)
+		HostKeySigner, err = readKey(HostKeyFile)
 		if err != nil {
 			errList = append(errList, fmt.Errorf("HOST_KEY_FILE is invalid or cannot be read: %w", err))
 		}
@@ -177,6 +171,7 @@ func main() {
 
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)
+	srv.MaxTimeout = time.Duration(5 * time.Minute)
 
 	var sessionID atomic.Int64
 	srv.Handle(func(_s gliderssh.Session) {
@@ -195,16 +190,11 @@ func main() {
 	})
 	go JobRunner.Wait(ctx)
 
-	// This gives us a good fake job for operations where we have to return a job
-	// ID but don't actually need to run a real job. It also functions as an
-	// on-startup sanity check that the agent can in fact call ONI commands.
+	// This functions as an on-startup sanity check to verify that the agent can
+	// in fact call ONI commands with its current configuration
 	slog.Info("Checking ONI install")
-	var id = JobRunner.NewJob("check")
-	var j = JobRunner.GetJob(id)
-	for j.Status() == queue.StatusPending || j.Status() == queue.StatusStarted {
-		time.Sleep(time.Millisecond * 100)
-		j = JobRunner.GetJob(id)
-	}
+	var j = JobRunner.NewJob("check")
+	j.Run(ctx)
 	switch j.Status() {
 	case queue.StatusSuccessful:
 		slog.Info("ONI check successful")
@@ -215,7 +205,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("starting ssh server", "port", BABind, "BATCH_SOURCE", BatchSource, "ONI_LOCATION", ONILocation, "version", version.Version)
+	slog.Info("starting ssh server",
+		"port", BABind,
+		"ONI_LOCATION", ONILocation,
+		"BATCH_SOURCE", BatchSource,
+		"HOST_KEY_FILE", HostKeyFile,
+		"version", version.Version,
+	)
 	var err = srv.ListenAndServe()
 	if err != nil && err != gliderssh.ErrServerClosed {
 		slog.Error("Unable to serve SSH", "error", err)

@@ -159,6 +159,29 @@ The following commands are currently available:
   success is returned. If it doesn't exist and no name was given, the agent
   will return failure.
 
+## Development
+
+For dev use, where you may not want to deal with integrating this with a real
+ONI instance, you can use the included fake-manage script, `manage.py`. Your
+environment might look something like this:
+
+```bash
+export BA_BIND=:2222
+export ONI_LOCATION=$(pwd)
+export BATCH_SOURCE=/path/to/oni/batches/
+export HOST_KEY_FILE=$(pwd)/agent_rsa
+export DB_CONNECTION="oni:oni@tcp(127.0.0.1:3306)/oni"
+```
+
+With `ONI_LOCATION` set to this project's directory, commands which would be
+run against ONI's `manage.py` will use the fake management script which is just
+a bash script that essentially does nothing.
+
+You still have to run a database unfortunately, but you can just export your
+ONI database's structure in a pinch and call it good enough, or use the ONI
+docker setup to create a database and just run that without any actual
+integration otherwise.
+
 ## Why?
 
 Open ONI currently has only web listeners which are proxied from Apache, or CLI

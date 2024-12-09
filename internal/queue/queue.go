@@ -4,7 +4,6 @@ package queue
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,20 +56,29 @@ func New(oniPath string) *Queue {
 	return q
 }
 
-// NewJob queues up a new ONI management command from the given args, and
-// returns the queued job's id
-func (q *Queue) NewJob(args ...string) int64 {
+// NewJob returns a Job set up to call ONI with the given args
+func (q *Queue) NewJob(args ...string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
 	q.seq++
 	var j = &Job{
-		args:     args,
-		id:       q.seq,
-		status:   StatusPending,
-		queuedAt: time.Now(),
+		bin:    q.binpath,
+		env:    q.env,
+		args:   args,
+		id:     q.seq,
+		status: StatusPending,
 	}
 	q.lookup[j.id] = j
+
+	return j
+}
+
+// QueueJob queues up a new ONI management command from the given args, and
+// returns the queued job's id
+func (q *Queue) QueueJob(args ...string) int64 {
+	var j = q.NewJob(args...)
+	j.queuedAt = time.Now()
 	q.queue <- j
 
 	return j.id
@@ -87,26 +95,11 @@ func (q *Queue) Wait(ctx context.Context) {
 	for {
 		select {
 		case j := <-q.queue:
-			q.run(ctx, j)
+			// We ignore errors here, as they're already logged by the job itself,
+			// and nothing can be done about them anyway
+			_ = j.Run(ctx)
 		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-func (q *Queue) run(ctx context.Context, j *Job) {
-	var logger = slog.With("id", j.id, "command", j.args)
-	var err = j.start(ctx, q.binpath, q.env)
-	if err != nil {
-		logger.Error("Unable to start job", "error", err)
-		return
-	}
-
-	logger.Info("Started job")
-	err = j.wait()
-	if err != nil {
-		logger.Error("Job failed", "error", err)
-		return
-	}
-	logger.Info("Job complete")
 }
