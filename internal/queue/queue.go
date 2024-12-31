@@ -13,7 +13,7 @@ import (
 
 // Queue holds the list of ONI jobs we need to run
 type Queue struct {
-	m       sync.Mutex
+	m       sync.RWMutex
 	seq     int64
 	lookup  map[int64]*Job
 	binpath string
@@ -86,6 +86,9 @@ func (q *Queue) QueueJob(args ...string) int64 {
 
 // GetJob returns a job by its id
 func (q *Queue) GetJob(id int64) *Job {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
 	return q.lookup[id]
 }
 
