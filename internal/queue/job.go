@@ -27,6 +27,7 @@ type Job struct {
 	id          int64
 	status      JobStatus
 	cmd         *exec.Cmd
+	name        string
 	bin         string
 	args        []string
 	env         []string
@@ -43,6 +44,7 @@ type Job struct {
 func NoOpJob() *Job {
 	return &Job{
 		id:          -1,
+		name:        "Non-ONI job",
 		status:      StatusSuccessful,
 		cmd:         nil,
 		args:        nil,
@@ -121,6 +123,16 @@ func (j *Job) Run(ctx context.Context) error {
 // ID returns the job's assigned ID number
 func (j *Job) ID() int64 {
 	return j.id
+}
+
+// Name returns the human-friendly name of the job
+func (j *Job) Name() string {
+	return j.name
+}
+
+// QueuedAt returns when the job was created (sent to the job queue)
+func (j *Job) QueuedAt() time.Time {
+	return j.queuedAt
 }
 
 // Status returns the job's status value
