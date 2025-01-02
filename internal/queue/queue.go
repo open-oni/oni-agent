@@ -64,14 +64,19 @@ func (q *Queue) NewJob(name string, args ...string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
+	// Since we don't know when a job will run, we give new jobs a wide berth for
+	// purging: if the purge isn't set elsewhere for some odd reason, they'll
+	// still get cleaned up after a month.
+	var purgeTime = time.Now().Add(time.Hour * 24 * 30)
 	q.seq++
 	var j = &Job{
-		name:   name,
-		bin:    q.binpath,
-		env:    q.env,
-		args:   args,
-		id:     q.seq,
-		status: StatusPending,
+		name:    name,
+		bin:     q.binpath,
+		env:     q.env,
+		args:    args,
+		id:      q.seq,
+		status:  StatusPending,
+		purgeAt: purgeTime,
 	}
 	q.lookup[j.id] = j
 
@@ -113,9 +118,22 @@ func (q *Queue) AllJobs() []*Job {
 	return list
 }
 
+func (q *Queue) purgeOldJobs() {
+	q.m.Lock()
+	defer q.m.Unlock()
+
+	var now = time.Now()
+	for id, j := range q.lookup {
+		if now.After(j.purgeAt) {
+			delete(q.lookup, id)
+		}
+	}
+}
+
 // Wait runs until ctx is canceled, watching for new jobs that need to be
 // queued up
 func (q *Queue) Wait(ctx context.Context) {
+	var lastPurgeCheck time.Time
 	for {
 		select {
 		case j := <-q.queue:
@@ -124,6 +142,12 @@ func (q *Queue) Wait(ctx context.Context) {
 			_ = j.Run(ctx)
 		case <-ctx.Done():
 			return
+		default:
+			if time.Since(lastPurgeCheck) > time.Hour {
+				q.purgeOldJobs()
+				lastPurgeCheck = time.Now()
+			}
+			time.Sleep(time.Second)
 		}
 	}
 }
