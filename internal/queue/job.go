@@ -34,6 +34,7 @@ type Job struct {
 	queuedAt    time.Time
 	startedAt   time.Time
 	completedAt time.Time
+	purgeAt     time.Time
 	err         error
 	stdout      logstream.Stream
 	stderr      logstream.Stream
@@ -73,6 +74,7 @@ func (j *Job) Start(ctx context.Context) error {
 	if j.err != nil {
 		logger.Error("Unable to start job", "error", j.err)
 		j.status = StatusFailStart
+		j.purgeAt = time.Now().Add(time.Hour * 24)
 		return j.err
 	}
 	j.status = StatusStarted
@@ -83,7 +85,7 @@ func (j *Job) Start(ctx context.Context) error {
 	return nil
 }
 
-// wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
+// Wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
 // copying to complete, setting the completed time if successful.
 func (j *Job) Wait() error {
 	var logger = slog.With("id", j.id, "command", j.args)
@@ -101,11 +103,13 @@ func (j *Job) Wait() error {
 	if j.err != nil {
 		logger.Error("Job failed", "error", j.err)
 		j.status = StatusFailed
+		j.purgeAt = time.Now().Add(time.Hour * 24)
 		return j.err
 	}
 
 	j.status = StatusSuccessful
 	j.completedAt = time.Now()
+	j.purgeAt = time.Now().Add(time.Hour * 24 * 7)
 	logger.Info("Job complete")
 	return nil
 }

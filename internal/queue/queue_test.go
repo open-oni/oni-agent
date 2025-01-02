@@ -124,6 +124,28 @@ func TestJobExecution_Fail(t *testing.T) {
 	}
 }
 
+func TestPurgeOldJobs(t *testing.T) {
+	var q = New("/opt/openoni")
+	var j = q.NewJob("test purge", "arg1")
+
+	var id = j.ID()
+	if q.GetJob(id) != j {
+		t.Error("job should be in the queue, but wasn't found")
+	}
+
+	q.purgeOldJobs()
+	if q.GetJob(id) != j {
+		t.Error("job shouldn't have been purged yet")
+	}
+
+	j.purgeAt = time.Now().Add(-time.Hour)
+	q.purgeOldJobs()
+
+	if q.GetJob(id) != nil {
+		t.Error("job not purged")
+	}
+}
+
 func TestAllJobs(t *testing.T) {
 	var q = New("/opt/openoni")
 	var j1 = q.NewJob("job1", "arg1")
