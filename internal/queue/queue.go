@@ -50,8 +50,10 @@ func New(oniPath string) *Queue {
 			path = strings.Split(parts[1], pathListSeparator)
 		}
 	}
-	path = append([]string{"/opt/openoni/ENV/bin"}, path...)
-	q.env = append(q.env, "VIRTUAL_ENV=/opt/openoni/ENV")
+	var envPath = filepath.Join(oniPath, "ENV")
+	var binPath = filepath.Join(envPath, "bin")
+	path = append([]string{binPath}, path...)
+	q.env = append(q.env, "VIRTUAL_ENV="+envPath)
 	q.env = append(q.env, "PATH="+strings.Join(path, pathListSeparator))
 
 	return q
