@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -91,6 +92,23 @@ func (q *Queue) GetJob(id int64) *Job {
 	defer q.m.RUnlock()
 
 	return q.lookup[id]
+}
+
+// AllJobs returns all jobs currently stored in memory
+func (q *Queue) AllJobs() []*Job {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
+	var list []*Job
+	for _, j := range q.lookup {
+		list = append(list, j)
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].queuedAt.Before(list[j].queuedAt)
+	})
+
+	return list
 }
 
 // Wait runs until ctx is canceled, watching for new jobs that need to be

@@ -81,6 +81,14 @@ func (s session) handle() {
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 
+	case "list-jobs":
+		var list = JobRunner.AllJobs()
+		var jobs []H
+		for _, j := range list {
+			jobs = append(jobs, H{"id": j.ID(), "name": j.Name(), "queued": j.QueuedAt(), "status": j.Status()})
+		}
+		s.respond(StatusSuccess, "", H{"jobs": jobs})
+
 	case "job-status":
 		if len(args) != 1 {
 			s.respond(StatusError, "You must supply a job ID", nil)
