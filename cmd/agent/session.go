@@ -191,7 +191,7 @@ func (s session) loadTitle() {
 		return
 	}
 
-	var j = JobRunner.NewJob("load_titles", dir)
+	var j = JobRunner.NewJob("Load title from MARC XML", []string{"load_titles", dir})
 	err = j.Run(context.Background())
 	if err != nil {
 		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
@@ -226,7 +226,7 @@ func (s session) loadBatch(name string) {
 		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
 		return
 	}
-	s.queueJob("Load batch", "load_batch", batchPath)
+	s.queueJob("Load batch", "load_batch", []string{batchPath})
 }
 
 func (s session) purgeBatch(name string) {
@@ -241,7 +241,7 @@ func (s session) purgeBatch(name string) {
 		s.respondNoJob()
 		return
 	}
-	s.queueJob("Purge batch", "purge_batch", name)
+	s.queueJob("Purge batch", "purge_batch", []string{name})
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
@@ -320,9 +320,9 @@ func (s session) respondNoJob() {
 	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": queue.NoOpJob().ID()}})
 }
 
-func (s session) queueJob(name, command string, args ...string) {
+func (s session) queueJob(name, command string, args []string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.QueueJob(name, combined...)
+	var id = JobRunner.QueueJob(name, combined)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 }
