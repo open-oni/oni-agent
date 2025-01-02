@@ -149,7 +149,7 @@ func (s session) loadTitle() {
 		var got = data[:n]
 		var reported string
 		if n > 1200 {
-			reported = string(data[:1000])+"..."+string(data[n-190:n])
+			reported = string(data[:1000]) + "..." + string(data[n-190:n])
 		} else {
 			reported = string(got)
 		}

@@ -29,7 +29,7 @@ func TestWrite(t *testing.T) {
 			expected: []string{"[2024-09-25T00:00:03.987654321Z] foobarbaz"},
 		},
 		"Multiple writes with newlines, trailing write": {
-			inputs:   []string{"foo\n", "bar\n", "baz"},
+			inputs: []string{"foo\n", "bar\n", "baz"},
 			expected: []string{
 				"[2024-09-25T00:00:01.987654321Z] foo",
 				"[2024-09-25T00:00:02.987654321Z] bar",
