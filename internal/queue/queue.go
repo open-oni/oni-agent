@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +14,7 @@ import (
 
 // Queue holds the list of ONI jobs we need to run
 type Queue struct {
-	m       sync.Mutex
+	m       sync.RWMutex
 	seq     int64
 	lookup  map[int64]*Job
 	binpath string
@@ -49,20 +50,23 @@ func New(oniPath string) *Queue {
 			path = strings.Split(parts[1], pathListSeparator)
 		}
 	}
-	path = append([]string{"/opt/openoni/ENV/bin"}, path...)
-	q.env = append(q.env, "VIRTUAL_ENV=/opt/openoni/ENV")
+	var envPath = filepath.Join(oniPath, "ENV")
+	var binPath = filepath.Join(envPath, "bin")
+	path = append([]string{binPath}, path...)
+	q.env = append(q.env, "VIRTUAL_ENV="+envPath)
 	q.env = append(q.env, "PATH="+strings.Join(path, pathListSeparator))
 
 	return q
 }
 
 // NewJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewJob(args ...string) *Job {
+func (q *Queue) NewJob(name string, args ...string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
 	q.seq++
 	var j = &Job{
+		name:   name,
 		bin:    q.binpath,
 		env:    q.env,
 		args:   args,
@@ -76,8 +80,8 @@ func (q *Queue) NewJob(args ...string) *Job {
 
 // QueueJob queues up a new ONI management command from the given args, and
 // returns the queued job's id
-func (q *Queue) QueueJob(args ...string) int64 {
-	var j = q.NewJob(args...)
+func (q *Queue) QueueJob(name string, args ...string) int64 {
+	var j = q.NewJob(name, args...)
 	j.queuedAt = time.Now()
 	q.queue <- j
 
@@ -86,7 +90,27 @@ func (q *Queue) QueueJob(args ...string) int64 {
 
 // GetJob returns a job by its id
 func (q *Queue) GetJob(id int64) *Job {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
 	return q.lookup[id]
+}
+
+// AllJobs returns all jobs currently stored in memory
+func (q *Queue) AllJobs() []*Job {
+	q.m.RLock()
+	defer q.m.RUnlock()
+
+	var list []*Job
+	for _, j := range q.lookup {
+		list = append(list, j)
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].queuedAt.Before(list[j].queuedAt)
+	})
+
+	return list
 }
 
 // Wait runs until ctx is canceled, watching for new jobs that need to be

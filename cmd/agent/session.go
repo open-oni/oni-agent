@@ -81,6 +81,14 @@ func (s session) handle() {
 	case "version":
 		s.respond(StatusSuccess, "", H{"version": version.Version})
 
+	case "list-jobs":
+		var list = JobRunner.AllJobs()
+		var jobs []H
+		for _, j := range list {
+			jobs = append(jobs, H{"id": j.ID(), "name": j.Name(), "queued": j.QueuedAt(), "status": j.Status()})
+		}
+		s.respond(StatusSuccess, "", H{"jobs": jobs})
+
 	case "job-status":
 		if len(args) != 1 {
 			s.respond(StatusError, "You must supply a job ID", nil)
@@ -141,7 +149,7 @@ func (s session) loadTitle() {
 		var got = data[:n]
 		var reported string
 		if n > 1200 {
-			reported = string(data[:1000])+"..."+string(data[n-190:n])
+			reported = string(data[:1000]) + "..." + string(data[n-190:n])
 		} else {
 			reported = string(got)
 		}
@@ -218,7 +226,7 @@ func (s session) loadBatch(name string) {
 		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
 		return
 	}
-	s.queueJob("load_batch", batchPath)
+	s.queueJob("Load batch", "load_batch", batchPath)
 }
 
 func (s session) purgeBatch(name string) {
@@ -233,7 +241,7 @@ func (s session) purgeBatch(name string) {
 		s.respondNoJob()
 		return
 	}
-	s.queueJob("purge_batch", name)
+	s.queueJob("Purge batch", "purge_batch", name)
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
@@ -265,7 +273,7 @@ func (s session) getJobStatus(arg string) {
 		return
 	}
 
-	var jobdata = H{"id": j.ID(), "status": j.Status()}
+	var jobdata = H{"id": j.ID(), "name": j.Name(), "queued": j.QueuedAt(), "status": j.Status()}
 	var status = StatusSuccess
 	var message string
 
@@ -299,6 +307,8 @@ func (s session) getJobLogs(arg string) {
 
 	var out = H{"job": H{
 		"id":     j.ID(),
+		"name":   j.Name(),
+		"queued": j.QueuedAt(),
 		"status": j.Status(),
 		"stdout": j.Stdout(),
 		"stderr": j.Stderr(),
@@ -310,9 +320,9 @@ func (s session) respondNoJob() {
 	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": queue.NoOpJob().ID()}})
 }
 
-func (s session) queueJob(command string, args ...string) {
+func (s session) queueJob(name, command string, args ...string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.QueueJob(combined...)
+	var id = JobRunner.QueueJob(name, combined...)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
 }
