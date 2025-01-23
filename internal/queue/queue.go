@@ -60,7 +60,7 @@ func New(oniPath string) *Queue {
 }
 
 // NewJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewJob(name string, args ...string) *Job {
+func (q *Queue) NewJob(name string, args []string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -85,8 +85,8 @@ func (q *Queue) NewJob(name string, args ...string) *Job {
 
 // QueueJob queues up a new ONI management command from the given args, and
 // returns the queued job's id
-func (q *Queue) QueueJob(name string, args ...string) int64 {
-	var j = q.NewJob(name, args...)
+func (q *Queue) QueueJob(name string, args []string) int64 {
+	var j = q.NewJob(name, args)
 	j.queuedAt = time.Now()
 	q.queue <- j
 

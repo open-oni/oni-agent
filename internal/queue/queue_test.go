@@ -57,7 +57,7 @@ func TestNewQueue(t *testing.T) {
 
 func TestJobLifecycle(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("test job", "arg1", "arg2")
+	var j = q.NewJob("test job", []string{"arg1", "arg2"})
 
 	if j.Status() != StatusPending {
 		t.Errorf("expected status %s, got %s", StatusPending, j.Status())
@@ -79,7 +79,7 @@ func TestJobLifecycle(t *testing.T) {
 
 func TestQueueJob(t *testing.T) {
 	var q = getQ(t)
-	var jobID = q.QueueJob("test job", "arg1")
+	var jobID = q.QueueJob("test job", []string{"arg1"})
 
 	var j = q.GetJob(jobID)
 	if j == nil {
@@ -93,7 +93,7 @@ func TestQueueJob(t *testing.T) {
 
 func TestJobExecution_Success(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("Test success", "succeed")
+	var j = q.NewJob("Test success", []string{"succeed"})
 	var err = j.Run(context.Background())
 
 	if err != nil {
@@ -112,7 +112,7 @@ func TestJobExecution_Success(t *testing.T) {
 
 func TestJobExecution_Fail(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("Test failure", "fail")
+	var j = q.NewJob("Test failure", []string{"fail"})
 	var err = j.Run(context.Background())
 
 	if err == nil {
@@ -126,7 +126,7 @@ func TestJobExecution_Fail(t *testing.T) {
 
 func TestPurgeOldJobs(t *testing.T) {
 	var q = New("/opt/openoni")
-	var j = q.NewJob("test purge", "arg1")
+	var j = q.NewJob("test purge", []string{"arg1"})
 
 	var id = j.ID()
 	if q.GetJob(id) != j {
@@ -148,9 +148,9 @@ func TestPurgeOldJobs(t *testing.T) {
 
 func TestAllJobs(t *testing.T) {
 	var q = New("/opt/openoni")
-	var j1 = q.NewJob("job1", "arg1")
+	var j1 = q.NewJob("job1", []string{"arg1"})
 	j1.queuedAt = time.Now()
-	var j2 = q.NewJob("job2", "arg2")
+	var j2 = q.NewJob("job2", []string{"arg2"})
 	j2.queuedAt = j1.queuedAt.Add(-1 * time.Hour)
 
 	var jobs = q.AllJobs()
