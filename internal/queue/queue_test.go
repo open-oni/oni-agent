@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/open-oni/oni-agent/internal/venv"
 )
 
 var wd, testdir string
@@ -18,13 +20,35 @@ func getQ(t *testing.T) *Queue {
 		t.Fatalf("Unable to get working dir: %s", err)
 	}
 	testdir = filepath.Join(wd, "testdata")
-	return New(testdir)
+	venv.Activate(testdir)
+	return New()
 }
 
-func TestNewQueue(t *testing.T) {
+func TestJobLifecycle(t *testing.T) {
 	var q = getQ(t)
+	var j = q.NewJob("test job", []string{"succeed"})
+
+	if j.Status() != StatusPending {
+		t.Errorf("expected status %s, got %s", StatusPending, j.Status())
+	}
+
+	if j.ID() <= 0 {
+		t.Error("expected positive job ID")
+	}
+
+	if j.Name() != "test job" {
+		t.Errorf("expected name %s, got %s", "test job", j.Name())
+	}
+
+	var fetchedJob = q.GetJob(j.ID())
+	if fetchedJob != j {
+		t.Error("GetJob returned wrong job")
+	}
+
+	// Run the job to test the command's environment
+	j.Run(context.Background())
 	var hasVirtualEnv, hasPath bool
-	for _, env := range q.env {
+	for _, env := range j.cmd.Env {
 		var parts = strings.Split(env, "=")
 		if len(parts) != 2 {
 			t.Errorf("Unexpected ENV setting: %q", env)
@@ -44,36 +68,17 @@ func TestNewQueue(t *testing.T) {
 				t.Errorf("Invalid PATH setting: bin path %q to be included, but got %q", bindir, parts[1])
 			}
 		}
-
 	}
-
 	if !hasVirtualEnv {
 		t.Error("VIRTUAL_ENV not set")
 	}
 	if !hasPath {
 		t.Error("PATH not set")
 	}
-}
 
-func TestJobLifecycle(t *testing.T) {
-	var q = getQ(t)
-	var j = q.NewJob("test job", []string{"arg1", "arg2"})
-
-	if j.Status() != StatusPending {
-		t.Errorf("expected status %s, got %s", StatusPending, j.Status())
-	}
-
-	if j.ID() <= 0 {
-		t.Error("expected positive job ID")
-	}
-
-	if j.Name() != "test job" {
-		t.Errorf("expected name %s, got %s", "test job", j.Name())
-	}
-
-	var fetchedJob = q.GetJob(j.ID())
-	if fetchedJob != j {
-		t.Error("GetJob returned wrong job")
+	// Validate post-job status
+	if j.Status() != StatusSuccessful {
+		t.Error("Job failed to run")
 	}
 }
 
@@ -125,7 +130,7 @@ func TestJobExecution_Fail(t *testing.T) {
 }
 
 func TestPurgeOldJobs(t *testing.T) {
-	var q = New("/opt/openoni")
+	var q = New()
 	var j = q.NewJob("test purge", []string{"arg1"})
 
 	var id = j.ID()
@@ -147,7 +152,7 @@ func TestPurgeOldJobs(t *testing.T) {
 }
 
 func TestAllJobs(t *testing.T) {
-	var q = New("/opt/openoni")
+	var q = New()
 	var j1 = q.NewJob("job1", []string{"arg1"})
 	j1.queuedAt = time.Now()
 	var j2 = q.NewJob("job2", []string{"arg2"})

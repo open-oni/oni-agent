@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/open-oni/oni-agent/internal/logstream"
+	"github.com/open-oni/oni-agent/internal/venv"
 )
 
 // JobStatus is a way to tell callers what's going on with any job in the queue
@@ -28,9 +29,7 @@ type Job struct {
 	status      JobStatus
 	cmd         *exec.Cmd
 	name        string
-	bin         string
 	args        []string
-	env         []string
 	queuedAt    time.Time
 	startedAt   time.Time
 	completedAt time.Time
@@ -63,10 +62,9 @@ func NoOpJob() *Job {
 // storing its pid and start time. After calling start, wait must then be
 // called to let the command finish and release resources.
 func (j *Job) Start(ctx context.Context) error {
-	j.cmd = exec.CommandContext(ctx, j.bin, j.args...)
+	j.cmd = venv.Command(ctx, j.args)
 	j.cmd.Stdout = &j.stdout
 	j.cmd.Stderr = &j.stderr
-	j.cmd.Env = j.env
 	var logger = slog.With("id", j.id, "command", j.args)
 
 	logger.Info("Starting job", "id", j.id, "command", j.args)

@@ -20,6 +20,7 @@ import (
 	gliderssh "github.com/gliderlabs/ssh"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/open-oni/oni-agent/internal/queue"
+	"github.com/open-oni/oni-agent/internal/venv"
 	"github.com/open-oni/oni-agent/internal/version"
 	"golang.org/x/crypto/ssh"
 )
@@ -167,7 +168,8 @@ func generateKey(filename string) (ssh.Signer, error) {
 
 func main() {
 	getEnvironment()
-	JobRunner = queue.New(ONILocation)
+	venv.Activate(ONILocation)
+	JobRunner = queue.New()
 
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)

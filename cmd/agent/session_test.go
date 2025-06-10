@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-oni/oni-agent/internal/logstream"
 	"github.com/open-oni/oni-agent/internal/queue"
+	"github.com/open-oni/oni-agent/internal/venv"
 	"github.com/open-oni/oni-agent/internal/version"
 )
 
@@ -113,7 +114,8 @@ func setup(t *testing.T) {
 	}
 
 	ONILocation = filepath.Join(wd, "testdata", "session")
-	JobRunner = queue.New(ONILocation)
+	venv.Activate(ONILocation)
+	JobRunner = queue.New()
 }
 
 func TestSession_VersionCommand(t *testing.T) {
