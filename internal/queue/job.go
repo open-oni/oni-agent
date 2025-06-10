@@ -4,11 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os/exec"
 	"time"
-
-	"github.com/open-oni/oni-agent/internal/logstream"
-	"github.com/open-oni/oni-agent/internal/venv"
 )
 
 // JobStatus is a way to tell callers what's going on with any job in the queue
@@ -23,11 +19,12 @@ const (
 	StatusFailed     JobStatus = "failed"
 )
 
-// Job represents a single ONI management job to be run
+// Job is the top-level "thing" that holds job data. Jobs are usually used for
+// command-line tasks, but can also do more generalized logic.
 type Job struct {
 	id          int64
 	status      JobStatus
-	cmd         *exec.Cmd
+	runner      runner
 	name        string
 	args        []string
 	queuedAt    time.Time
@@ -35,56 +32,44 @@ type Job struct {
 	completedAt time.Time
 	purgeAt     time.Time
 	err         error
-	stdout      logstream.Stream
-	stderr      logstream.Stream
-	pid         int
 }
 
 // NoOpJob returns a job that does nothing and has a success status
 func NoOpJob() *Job {
 	return &Job{
 		id:          -1,
-		name:        "Non-ONI job",
+		name:        "No-op job",
 		status:      StatusSuccessful,
-		cmd:         nil,
 		args:        nil,
 		queuedAt:    time.Now(),
 		startedAt:   time.Now(),
 		completedAt: time.Now(),
 		err:         nil,
-		stdout:      logstream.Stream{},
-		stderr:      logstream.Stream{},
-		pid:         -1,
 	}
 }
 
-// Start creates the command with the given context, starting the command and
-// storing its pid and start time. After calling start, wait must then be
-// called to let the command finish and release resources.
+// Start kicks off this job's runner
 func (j *Job) Start(ctx context.Context) error {
-	j.cmd = venv.Command(ctx, j.args)
-	j.cmd.Stdout = &j.stdout
-	j.cmd.Stderr = &j.stderr
 	var logger = slog.With("id", j.id, "command", j.args)
-
 	logger.Info("Starting job", "id", j.id, "command", j.args)
-	j.err = j.cmd.Start()
+
+	j.err = j.runner.Start(ctx)
 	if j.err != nil {
 		logger.Error("Unable to start job", "error", j.err)
 		j.status = StatusFailStart
 		j.purgeAt = time.Now().Add(time.Hour * 24)
 		return j.err
 	}
+
 	j.status = StatusStarted
 	logger.Info("Job started successfully", "id", j.id, "command", j.args)
 
 	j.startedAt = time.Now()
-	j.pid = j.cmd.Process.Pid
 	return nil
 }
 
-// Wait wraps exec.Cmd.Wait, waiting for the command to exit and various stream
-// copying to complete, setting the completed time if successful.
+// Wait checks the runner's state, waiting for it to finish if it's in a valid
+// state, and stores relevant data (logs, success/failure, etc.) on completion.
 func (j *Job) Wait() error {
 	var logger = slog.With("id", j.id, "command", j.args)
 
@@ -97,7 +82,7 @@ func (j *Job) Wait() error {
 		return fmt.Errorf("waiting for job completion: Start must first be called")
 	}
 
-	j.err = j.cmd.Wait()
+	j.err = j.runner.Wait()
 	if j.err != nil {
 		logger.Error("Job failed", "error", j.err)
 		j.status = StatusFailed
@@ -148,12 +133,12 @@ func (j *Job) Error() error {
 	return j.err
 }
 
-// Stdout returns the captured output to STDOUT
+// Stdout returns the runner's output, if any, with timestamp prefixes
 func (j *Job) Stdout() []string {
-	return j.stdout.Timestamped()
+	return j.runner.Stdout().Timestamped()
 }
 
-// Stderr returns the captured output to STDERR
+// Stderr returns the runner's errors, if any, with timestamp prefixes
 func (j *Job) Stderr() []string {
-	return j.stderr.Timestamped()
+	return j.runner.Stderr().Timestamped()
 }

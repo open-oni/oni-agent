@@ -11,10 +11,10 @@ import (
 
 // Queue holds the list of ONI jobs we need to run
 type Queue struct {
-	m       sync.RWMutex
-	seq     int64
-	lookup  map[int64]*Job
-	queue   chan *Job
+	m      sync.RWMutex
+	seq    int64
+	lookup map[int64]*Job
+	queue  chan *Job
 }
 
 // New provides a new job queue
@@ -22,8 +22,8 @@ func New() *Queue {
 	return &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000)}
 }
 
-// NewJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewJob(name string, args []string) *Job {
+// NewONIJob returns a Job set up to call ONI with the given args
+func (q *Queue) NewONIJob(name string, args []string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -33,9 +33,9 @@ func (q *Queue) NewJob(name string, args []string) *Job {
 	var purgeTime = time.Now().Add(time.Hour * 24 * 30)
 	q.seq++
 	var j = &Job{
-		name:    name,
-		args:    args,
 		id:      q.seq,
+		name:    name,
+		runner:  newONIRunner(args),
 		status:  StatusPending,
 		purgeAt: purgeTime,
 	}
@@ -44,10 +44,10 @@ func (q *Queue) NewJob(name string, args []string) *Job {
 	return j
 }
 
-// QueueJob queues up a new ONI management command from the given args, and
+// QueueONIJob queues up a new ONI management command from the given args, and
 // returns the queued job's id
-func (q *Queue) QueueJob(name string, args []string) int64 {
-	var j = q.NewJob(name, args)
+func (q *Queue) QueueONIJob(name string, args []string) int64 {
+	var j = q.NewONIJob(name, args)
 	j.queuedAt = time.Now()
 	q.queue <- j
 

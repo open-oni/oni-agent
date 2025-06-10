@@ -26,7 +26,7 @@ func getQ(t *testing.T) *Queue {
 
 func TestJobLifecycle(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("test job", []string{"succeed"})
+	var j = q.NewONIJob("test job", []string{"succeed"})
 
 	if j.Status() != StatusPending {
 		t.Errorf("expected status %s, got %s", StatusPending, j.Status())
@@ -48,7 +48,7 @@ func TestJobLifecycle(t *testing.T) {
 	// Run the job to test the command's environment
 	j.Run(context.Background())
 	var hasVirtualEnv, hasPath bool
-	for _, env := range j.cmd.Env {
+	for _, env := range j.runner.(*oniRunner).cmd.Env {
 		var parts = strings.Split(env, "=")
 		if len(parts) != 2 {
 			t.Errorf("Unexpected ENV setting: %q", env)
@@ -82,9 +82,9 @@ func TestJobLifecycle(t *testing.T) {
 	}
 }
 
-func TestQueueJob(t *testing.T) {
+func TestQueueONIJob(t *testing.T) {
 	var q = getQ(t)
-	var jobID = q.QueueJob("test job", []string{"arg1"})
+	var jobID = q.QueueONIJob("test job", []string{"arg1"})
 
 	var j = q.GetJob(jobID)
 	if j == nil {
@@ -98,7 +98,7 @@ func TestQueueJob(t *testing.T) {
 
 func TestJobExecution_Success(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("Test success", []string{"succeed"})
+	var j = q.NewONIJob("Test success", []string{"succeed"})
 	var err = j.Run(context.Background())
 
 	if err != nil {
@@ -117,7 +117,7 @@ func TestJobExecution_Success(t *testing.T) {
 
 func TestJobExecution_Fail(t *testing.T) {
 	var q = getQ(t)
-	var j = q.NewJob("Test failure", []string{"fail"})
+	var j = q.NewONIJob("Test failure", []string{"fail"})
 	var err = j.Run(context.Background())
 
 	if err == nil {
@@ -131,7 +131,7 @@ func TestJobExecution_Fail(t *testing.T) {
 
 func TestPurgeOldJobs(t *testing.T) {
 	var q = New()
-	var j = q.NewJob("test purge", []string{"arg1"})
+	var j = q.NewONIJob("test purge", []string{"arg1"})
 
 	var id = j.ID()
 	if q.GetJob(id) != j {
@@ -153,9 +153,9 @@ func TestPurgeOldJobs(t *testing.T) {
 
 func TestAllJobs(t *testing.T) {
 	var q = New()
-	var j1 = q.NewJob("job1", []string{"arg1"})
+	var j1 = q.NewONIJob("job1", []string{"arg1"})
 	j1.queuedAt = time.Now()
-	var j2 = q.NewJob("job2", []string{"arg2"})
+	var j2 = q.NewONIJob("job2", []string{"arg2"})
 	j2.queuedAt = j1.queuedAt.Add(-1 * time.Hour)
 
 	var jobs = q.AllJobs()
