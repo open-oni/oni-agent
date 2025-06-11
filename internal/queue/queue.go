@@ -22,8 +22,7 @@ func New() *Queue {
 	return &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000)}
 }
 
-// NewONIJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewONIJob(name string, args []string) *Job {
+func (q *Queue) newJob(name string) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -35,12 +34,18 @@ func (q *Queue) NewONIJob(name string, args []string) *Job {
 	var j = &Job{
 		id:      q.seq,
 		name:    name,
-		runner:  newONIRunner(args),
 		status:  StatusPending,
 		purgeAt: purgeTime,
 	}
 	q.lookup[j.id] = j
 
+	return j
+}
+
+// NewONIJob returns a Job set up to call ONI with the given args
+func (q *Queue) NewONIJob(name string, args []string) *Job {
+	var j = q.newJob(name)
+	j.runner = newONIRunner(args)
 	return j
 }
 
