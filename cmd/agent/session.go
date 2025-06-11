@@ -339,9 +339,10 @@ func (s session) respondNoJob() {
 
 func (s session) queueONIJob(name, command string, args []string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.QueueONIJob(name, combined)
+	var j = JobRunner.NewONIJob(name, combined)
+	JobRunner.Push(j)
 
-	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
 }
 
 func (s session) ensureAwardee(code string, name string) {

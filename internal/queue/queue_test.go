@@ -82,14 +82,21 @@ func TestJobLifecycle(t *testing.T) {
 	}
 }
 
-func TestQueueONIJob(t *testing.T) {
+func TestPush(t *testing.T) {
 	var q = getQ(t)
-	var jobID = q.QueueONIJob("test job", []string{"arg1"})
+	var j = q.NewONIJob("test job", []string{"arg1"})
 
-	var j = q.GetJob(jobID)
+	// Ensure the queue actually has the job
+	j = q.GetJob(j.ID())
 	if j == nil {
 		t.Fatal("queued job not found")
 	}
+
+	if !j.queuedAt.IsZero() {
+		t.Error("queuedAt shouldn't be set yet")
+	}
+
+	q.Push(j)
 
 	if j.queuedAt.IsZero() {
 		t.Error("queuedAt not set")

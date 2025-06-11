@@ -22,7 +22,7 @@ func New() *Queue {
 	return &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000)}
 }
 
-func (q *Queue) newJob(name string) *Job {
+func (q *Queue) newJob(name string, r runner) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -35,6 +35,7 @@ func (q *Queue) newJob(name string) *Job {
 		id:      q.seq,
 		name:    name,
 		status:  StatusPending,
+		runner:  r,
 		purgeAt: purgeTime,
 	}
 	q.lookup[j.id] = j
@@ -42,21 +43,16 @@ func (q *Queue) newJob(name string) *Job {
 	return j
 }
 
-// NewONIJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewONIJob(name string, args []string) *Job {
-	var j = q.newJob(name)
-	j.runner = newONIRunner(args)
-	return j
-}
-
-// QueueONIJob queues up a new ONI management command from the given args, and
-// returns the queued job's id
-func (q *Queue) QueueONIJob(name string, args []string) int64 {
-	var j = q.NewONIJob(name, args)
+// Push appends j to the job queue
+func (q *Queue) Push(j *Job) {
 	j.queuedAt = time.Now()
 	q.queue <- j
+}
 
-	return j.id
+// NewONIJob returns a Job set up to do a single ONI `manage.py` call with the
+// given args
+func (q *Queue) NewONIJob(name string, args []string) *Job {
+	return q.newJob(name, newONIRunner(args))
 }
 
 // GetJob returns a job by its id
