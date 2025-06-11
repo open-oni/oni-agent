@@ -53,6 +53,14 @@ func (j *Job) Start(ctx context.Context) error {
 	var logger = slog.With("id", j.id, "command", j.args)
 	logger.Info("Starting job", "id", j.id, "command", j.args)
 
+	if j.runner == nil {
+		j.err = fmt.Errorf("job has no runner")
+		logger.Error("Unable to start job", "error", j.err)
+		j.status = StatusFailStart
+		j.purgeAt = time.Now().Add(time.Hour * 24)
+		return j.err
+	}
+
 	j.err = j.runner.Start(ctx)
 	if j.err != nil {
 		logger.Error("Unable to start job", "error", j.err)
