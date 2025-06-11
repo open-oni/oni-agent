@@ -142,18 +142,20 @@ func (s session) handle() {
 	}
 }
 
-func (s session) loadTitle() {
+// readAll reads whatever data was written to the ssh channel and returns it.
+// The read will continue indefinitely, stopping only when the magic string
+// "\n\nEND\n" is seen at the end of the buffer.
+func (s session) readAll() ([]byte, error) {
 	// Create a ~100k data-receiving buffer
 	var data = make([]byte, 100_000)
 
-	var marcData []byte
+	var output []byte
 	for {
 		var n, err = s.io.Read(data)
 		if err != nil {
-			slog.Error("Unable to read from client", "error", err)
-			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
-			return
+			return output, err
 		}
+
 		var got = data[:n]
 		var reported string
 		if n > 1200 {
@@ -161,19 +163,30 @@ func (s session) loadTitle() {
 		} else {
 			reported = string(got)
 		}
-		slog.Info("Got data", "size", n, "data", reported)
+		slog.Debug("Read data from ssh client", "size", n, "data", reported)
 
-		marcData = append(marcData, got...)
-		var l = len(marcData)
-		if l > 6 && string(marcData[l-6:]) == "\n\nEND\n" {
-			marcData = marcData[:l-6]
+		output = append(output, got...)
+		var l = len(output)
+		if l > 6 && string(output[l-6:]) == "\n\nEND\n" {
+			output = output[:l-6]
 			break
 		}
 	}
 
+	return output, nil
+}
+
+func (s session) loadTitle() {
+	var marcData, err = s.readAll()
+	if err != nil {
+		slog.Error("Unable to read from client", "error", err)
+		s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
+		return
+	}
+
 	// Parse the data to ensure it's valid
 	var node = &xmlnode.Node{}
-	var err = xml.Unmarshal(marcData, node)
+	err = xml.Unmarshal(marcData, node)
 	if err != nil {
 		slog.Error("Invalid XML", "error", err)
 		s.respond(StatusError, "Invalid data", H{"error": err.Error()})
