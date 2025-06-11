@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync/atomic"
@@ -193,48 +191,10 @@ func (s session) loadTitle() {
 		return
 	}
 
-	// Create a self-deleting temp dir
-	var dir string
-	dir, err = os.MkdirTemp("", "*-oni-marc")
-	if err != nil {
-		slog.Error("Unable to create temp dir", "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
-		return
-	}
-	defer os.Remove(dir)
+	var j = JobRunner.NewLoadTitleJob(marcData)
+	JobRunner.Push(j)
 
-	// Write the MARC record out and tell ONI to ingest it
-	var fpath = filepath.Join(dir, "marc.xml")
-	err = os.WriteFile(fpath, marcData, 0600)
-	if err != nil {
-		slog.Error("Unable to write MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
-		return
-	}
-
-	var j = JobRunner.NewONIJob("Load title from MARC XML", []string{"load_titles", dir})
-	err = j.Run(context.Background())
-
-	var jobData = H{
-		"id":     j.ID(),
-		"name":   j.Name(),
-		"status": j.Status(),
-		"stdout": j.Stdout(),
-		"stderr": j.Stderr(),
-	}
-
-	if err != nil {
-		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error(), "job": jobData})
-		return
-	}
-
-	// We only remove the file if there were no load errors. This leaves a mess
-	// but also allows debugging.
-	os.Remove(fpath)
-
-	slog.Info("Received data", "marc", string(marcData))
-	s.respond(StatusSuccess, "MARC XML Received", H{"job": jobData})
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
 }
 
 func (s session) loadBatch(name string) {

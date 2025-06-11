@@ -55,6 +55,12 @@ func (q *Queue) NewONIJob(name string, args []string) *Job {
 	return q.newJob(name, newONIRunner(args))
 }
 
+// NewLoadTitleJob returns a job set up to load a title into ONI, as described
+// in the raw MARC xml passed in
+func (q *Queue) NewLoadTitleJob(xml []byte) *Job {
+	return q.newJob("load title", newLoadTitleRunner(xml))
+}
+
 // GetJob returns a job by its id
 func (q *Queue) GetJob(id int64) *Job {
 	q.m.RLock()
