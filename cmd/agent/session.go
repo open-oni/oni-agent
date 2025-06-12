@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 	"github.com/uoregon-libraries/gopkg/xmlnode"
@@ -20,8 +19,17 @@ import (
 
 var sessionID atomic.Int64
 
+// sessionIO defines the necessary methods for a session to perform I/O, get a
+// command, and exit
+type sessionIO interface {
+	Command() []string
+	Read(data []byte) (int, error)
+	Write(data []byte) (int, error)
+	Exit(code int) error
+}
+
 type session struct {
-	ssh.Session
+	sessionIO
 	id int64
 }
 
@@ -388,7 +396,7 @@ func (s session) ensureAwardee(code string, name string) {
 // to parse the status instead.
 func (s session) close() {
 	s.logInfo("Closing connection...")
-	var err = s.Session.Exit(0)
+	var err = s.Exit(0)
 	if err != nil {
 		s.logError("Error closing connection", "error", err)
 	}
