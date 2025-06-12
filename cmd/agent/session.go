@@ -29,7 +29,7 @@ type sessionIO interface {
 }
 
 type session struct {
-	sessionIO
+	io sessionIO
 	id int64
 }
 
@@ -70,12 +70,12 @@ func (s session) respond(st Status, msg string, data H) {
 		return
 	}
 
-	s.Write(b)
+	s.io.Write(b)
 	s.close()
 }
 
 func (s session) handle() {
-	var parts = s.Command()
+	var parts = s.io.Command()
 	if len(parts) == 0 {
 		s.respond(StatusError, "no command specified", nil)
 		return
@@ -148,7 +148,7 @@ func (s session) loadTitle() {
 
 	var marcData []byte
 	for {
-		var n, err = s.Read(data)
+		var n, err = s.io.Read(data)
 		if err != nil {
 			slog.Error("Unable to read from client", "error", err)
 			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
@@ -396,7 +396,7 @@ func (s session) ensureAwardee(code string, name string) {
 // to parse the status instead.
 func (s session) close() {
 	s.logInfo("Closing connection...")
-	var err = s.Exit(0)
+	var err = s.io.Exit(0)
 	if err != nil {
 		s.logError("Error closing connection", "error", err)
 	}

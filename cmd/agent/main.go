@@ -175,7 +175,7 @@ func main() {
 
 	var sessionID atomic.Int64
 	srv.Handle(func(_s gliderssh.Session) {
-		var s = session{sessionIO: _s, id: sessionID.Add(1)}
+		var s = session{io: _s, id: sessionID.Add(1)}
 
 		s.logInfo("Connection established", "source", _s.RemoteAddr(), "command", _s.RawCommand())
 		s.handle()
