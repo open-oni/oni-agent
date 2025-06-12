@@ -9,7 +9,7 @@ import (
 
 var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 987654321, time.UTC)
 
-func gettf(addSeconds int) timeFunc {
+func gettf(addSeconds int) NowFunc {
 	return func() time.Time {
 		return baseTime.Add(time.Second * time.Duration(addSeconds))
 	}
