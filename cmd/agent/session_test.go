@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-oni/oni-agent/internal/logstream"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 )
@@ -74,14 +76,24 @@ func (m *mockSessionIO) Exit(code int) error {
 	return nil
 }
 
+type sessionResponse struct {
+	ID int64
+}
+
+type jobResponse struct {
+	Stdout []string `json:",omitempty"`
+	Stderr []string `json:",omitempty"`
+	Error  string
+}
+
 // testResponse holds response data that we receive so we can do a deep compare
 type testResponse struct {
 	Status  Status
 	Message string
-	Session struct {
-		ID int64
-	}
-	Version string `json:"version"`
+	Session sessionResponse
+	Version string
+	Error   string
+	Job     jobResponse `json:",omitempty"`
 }
 
 // getResponseData unmarshals the mock session's output into a testResponse struct
@@ -122,7 +134,8 @@ func TestSession_VersionCommand(t *testing.T) {
 	var expected = &testResponse{
 		Status:  StatusSuccess,
 		Version: version.Version,
-		Session: struct{ ID int64 }{ID: 123},
+		Session: sessionResponse{ID: 123},
+		Job:     jobResponse{Stdout: nil, Stderr: nil, Error: ""},
 	}
 
 	var out = cmp.Diff(expected, got)
@@ -135,39 +148,68 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 	setup(t)
 
 	var tests = map[string]struct {
-		name            string
-		inputData       string
-		inputError      error
-		expectedStatus  Status
-		expectedMessage string
-		expectedStdout  string
+		name         string
+		inputData    string
+		inputError   error
+		expectedResp *testResponse
 	}{
 		"read error": {
-			name:            "read error",
-			inputData:       "",
-			inputError:      fmt.Errorf("simulated read error"),
-			expectedStatus:  StatusError,
-			expectedMessage: "Read error, connection terminating",
+			name:       "read error",
+			inputError: fmt.Errorf("simulated read error"),
+			expectedResp: &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusError,
+				Message: "Read error, connection terminating",
+				Error:   "simulated read error",
+			},
 		},
 		"invalid xml": {
-			name:            "invalid xml",
-			inputData:       "<root><invalid></root>\n\nEND\n",
-			inputError:      nil,
-			expectedStatus:  StatusError,
-			expectedMessage: "Invalid data",
+			name:       "invalid xml",
+			inputData:  "<root><invalid></root>\n\nEND\n",
+			expectedResp: &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusError,
+				Message: "Invalid data",
+				Error:   "XML syntax error on line 1: element <invalid> closed by </root>",
+			},
 		},
 		"successful load": {
-			name:            "successful load",
-			inputData:       "<root><title>Test Title</title></root>\n\nEND\n",
-			inputError:      nil,
-			expectedStatus:  StatusSuccess,
-			expectedMessage: "MARC XML Received",
-			expectedStdout:  `loading title from XML: "<root><title>Test Title</title></root>"`,
+			name:       "successful load",
+			inputData:  "<root><title>Test Title</title></root>\n\nEND\n",
+			expectedResp: &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusSuccess,
+				Message: "MARC XML Received",
+				Job: jobResponse{
+					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] Loading titles from XML: "<root><title>Test Title</title></root>"`},
+				},
+			},
+		},
+		"failed load": {
+			name:       "failed load",
+			inputData:  "<root>fail</root>\n\nEND\n",
+			expectedResp: &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusError,
+				Message: "Internal error, unable to ingest MARC",
+				Error:   "exit status 1",
+				Job: jobResponse{
+					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] You asked for failure, bruh!`},
+				},
+			},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Set time func for consistent logging
+			var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 987654321, time.UTC)
+			var offset int64 = 0
+			logstream.SetCustomNowFunction(func() time.Time {
+				offset++
+				return baseTime.Add(time.Second * time.Duration(offset))
+			})
+
 			var mockIO = newMockSessionIO([]string{"load-title"})
 			if tc.inputError != nil {
 				mockIO.SetInputError(tc.inputError)
@@ -187,16 +229,11 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 				t.Errorf("Expected exit code 0, got %d", mockIO.exitCode)
 			}
 
-			var resp = mockIO.getResponseData(t)
-			if resp.Status != tc.expectedStatus {
-				t.Errorf("Expected status %q, got %q", tc.expectedStatus, resp.Status)
+			var got = mockIO.getResponseData(t)
+			var diff = cmp.Diff(tc.expectedResp, got)
+			if diff != "" {
+				t.Errorf(diff)
 			}
-			if resp.Message != tc.expectedMessage {
-				t.Errorf("Expected message %q, got %q", tc.expectedMessage, resp.Message)
-			}
-
-			// TODO: make sure the manage command's stdout / stderr match up with our
-			// expectated outputs
 		})
 	}
 }

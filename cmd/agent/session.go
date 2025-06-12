@@ -201,9 +201,18 @@ func (s session) loadTitle() {
 
 	var j = JobRunner.NewJob("Load title from MARC XML", []string{"load_titles", dir})
 	err = j.Run(context.Background())
+
+	var jobData = H{
+		"id":     j.ID(),
+		"name":   j.Name(),
+		"status": j.Status(),
+		"stdout": j.Stdout(),
+		"stderr": j.Stderr(),
+	}
+
 	if err != nil {
 		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
+		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error(), "job": jobData})
 		return
 	}
 
@@ -212,7 +221,7 @@ func (s session) loadTitle() {
 	os.Remove(fpath)
 
 	slog.Info("Received data", "marc", string(marcData))
-	s.respond(StatusSuccess, "MARC XML Received", nil)
+	s.respond(StatusSuccess, "MARC XML Received", H{"job": jobData})
 }
 
 func (s session) loadBatch(name string) {
