@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 )
 
@@ -73,6 +77,7 @@ func (m *mockSessionIO) Exit(code int) error {
 // testResponse holds response data that we receive so we can do a deep compare
 type testResponse struct {
 	Status  Status
+	Message string
 	Session struct {
 		ID int64
 	}
@@ -89,7 +94,19 @@ func (m *mockSessionIO) getResponseData(t *testing.T) *testResponse {
 	return &resp
 }
 
+func setup(t *testing.T) {
+	var wd, err = os.Getwd()
+	if err != nil {
+		t.Fatalf("Cannot get current working dir: %s", err)
+	}
+
+	ONILocation = filepath.Join(wd, "testdata", "session")
+	JobRunner = queue.New(ONILocation)
+}
+
 func TestSession_VersionCommand(t *testing.T) {
+	setup(t)
+
 	var mockIO = newMockSessionIO([]string{"version"})
 	var s = session{io: mockIO, id: 123}
 
@@ -111,5 +128,75 @@ func TestSession_VersionCommand(t *testing.T) {
 	var out = cmp.Diff(expected, got)
 	if out != "" {
 		t.Errorf(out)
+	}
+}
+
+func TestSession_LoadTitleCommand(t *testing.T) {
+	setup(t)
+
+	var tests = map[string]struct {
+		name            string
+		inputData       string
+		inputError      error
+		expectedStatus  Status
+		expectedMessage string
+		expectedStdout  string
+	}{
+		"read error": {
+			name:            "read error",
+			inputData:       "",
+			inputError:      fmt.Errorf("simulated read error"),
+			expectedStatus:  StatusError,
+			expectedMessage: "Read error, connection terminating",
+		},
+		"invalid xml": {
+			name:            "invalid xml",
+			inputData:       "<root><invalid></root>\n\nEND\n",
+			inputError:      nil,
+			expectedStatus:  StatusError,
+			expectedMessage: "Invalid data",
+		},
+		"successful load": {
+			name:            "successful load",
+			inputData:       "<root><title>Test Title</title></root>\n\nEND\n",
+			inputError:      nil,
+			expectedStatus:  StatusSuccess,
+			expectedMessage: "MARC XML Received",
+			expectedStdout:  `loading title from XML: "<root><title>Test Title</title></root>"`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var mockIO = newMockSessionIO([]string{"load-title"})
+			if tc.inputError != nil {
+				mockIO.SetInputError(tc.inputError)
+			} else {
+				mockIO.SetInputString(tc.inputData)
+			}
+
+			var s = session{io: mockIO, id: 456}
+			s.handle()
+
+			// Exit should always be called, and always with a zero status (see
+			// [session.close] for details)
+			if !mockIO.exitCalled {
+				t.Errorf("Exit() should have been called")
+			}
+			if mockIO.exitCode != 0 {
+				t.Errorf("Expected exit code 0, got %d", mockIO.exitCode)
+			}
+
+			var resp = mockIO.getResponseData(t)
+			if resp.Status != tc.expectedStatus {
+				t.Errorf("Expected status %q, got %q", tc.expectedStatus, resp.Status)
+			}
+			if resp.Message != tc.expectedMessage {
+				t.Errorf("Expected message %q, got %q", tc.expectedMessage, resp.Message)
+			}
+
+			// TODO: make sure the manage command's stdout / stderr match up with our
+			// expectated outputs
+		})
 	}
 }
