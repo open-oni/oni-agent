@@ -175,11 +175,11 @@ func main() {
 
 	var sessionID atomic.Int64
 	srv.Handle(func(_s gliderssh.Session) {
-		var s = session{Session: _s, id: sessionID.Add(1)}
+		var s = session{io: _s, id: sessionID.Add(1)}
 
-		s.logInfo("Connection established", "source", s.RemoteAddr(), "command", s.RawCommand())
+		s.logInfo("Connection established", "source", _s.RemoteAddr(), "command", _s.RawCommand())
 		s.handle()
-		s.logInfo("Session closed", "source", s.RemoteAddr(), "command", s.RawCommand())
+		s.logInfo("Session closed", "source", _s.RemoteAddr(), "command", _s.RawCommand())
 	})
 
 	var ctx, cancel = context.WithCancel(context.Background())

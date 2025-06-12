@@ -33,16 +33,21 @@ type Stream struct {
 	unprocessed string
 }
 
+// NowFunc is any function that returns the current time
+type NowFunc func() time.Time
+
+var timeNow NowFunc = time.Now
+
+// SetCustomNowFunction is a hack to allow testing logstreams from external
+// packages. It should never be used outside testing.
+func SetCustomNowFunction(fn NowFunc) {
+	timeNow = fn
+}
+
 // New instantiates a new Stream ready for use as an io.Writer
 func New() *Stream {
 	return &Stream{}
 }
-
-type timeFunc func() time.Time
-
-// timeNow gives us a way to mock time for testing; it is simply set to
-// time.Now by default
-var timeNow timeFunc = time.Now
 
 // Write implements io.Writer's Write method, splitting up the written data by
 // the OS line split character(s)

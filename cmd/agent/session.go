@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/gliderlabs/ssh"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 	"github.com/uoregon-libraries/gopkg/xmlnode"
@@ -20,8 +19,17 @@ import (
 
 var sessionID atomic.Int64
 
+// sessionIO defines the necessary methods for a session to perform I/O, get a
+// command, and exit
+type sessionIO interface {
+	Command() []string
+	Read(data []byte) (int, error)
+	Write(data []byte) (int, error)
+	Exit(code int) error
+}
+
 type session struct {
-	ssh.Session
+	io sessionIO
 	id int64
 }
 
@@ -62,12 +70,12 @@ func (s session) respond(st Status, msg string, data H) {
 		return
 	}
 
-	s.Write(b)
+	s.io.Write(b)
 	s.close()
 }
 
 func (s session) handle() {
-	var parts = s.Command()
+	var parts = s.io.Command()
 	if len(parts) == 0 {
 		s.respond(StatusError, "no command specified", nil)
 		return
@@ -140,7 +148,7 @@ func (s session) loadTitle() {
 
 	var marcData []byte
 	for {
-		var n, err = s.Read(data)
+		var n, err = s.io.Read(data)
 		if err != nil {
 			slog.Error("Unable to read from client", "error", err)
 			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
@@ -193,9 +201,18 @@ func (s session) loadTitle() {
 
 	var j = JobRunner.NewJob("Load title from MARC XML", []string{"load_titles", dir})
 	err = j.Run(context.Background())
+
+	var jobData = H{
+		"id":     j.ID(),
+		"name":   j.Name(),
+		"status": j.Status(),
+		"stdout": j.Stdout(),
+		"stderr": j.Stderr(),
+	}
+
 	if err != nil {
 		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
+		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error(), "job": jobData})
 		return
 	}
 
@@ -204,7 +221,7 @@ func (s session) loadTitle() {
 	os.Remove(fpath)
 
 	slog.Info("Received data", "marc", string(marcData))
-	s.respond(StatusSuccess, "MARC XML Received", nil)
+	s.respond(StatusSuccess, "MARC XML Received", H{"job": jobData})
 }
 
 func (s session) loadBatch(name string) {
@@ -388,7 +405,7 @@ func (s session) ensureAwardee(code string, name string) {
 // to parse the status instead.
 func (s session) close() {
 	s.logInfo("Closing connection...")
-	var err = s.Session.Exit(0)
+	var err = s.io.Exit(0)
 	if err != nil {
 		s.logError("Error closing connection", "error", err)
 	}
