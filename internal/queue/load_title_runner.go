@@ -33,12 +33,12 @@ func newLoadTitleRunner(xml []byte) *loadTitleRunner {
 // Start sets up all the data and kicks off the processing of the XML file
 // followed by the ONI title load
 func (r *loadTitleRunner) Start(ctx context.Context) error {
+	r.running.Store(true)
 	go r.run(ctx)
 	return nil
 }
 
 func (r *loadTitleRunner) run(ctx context.Context) {
-	r.running.Store(true)
 	defer r.running.Store(false)
 
 	var err error
