@@ -8,6 +8,10 @@ bin:
 test:
 	go test ./...
 
+.PHONY: format
+format:
+	go fmt ./...
+
 .PHONY: lint
 lint:
 	revive ./...
