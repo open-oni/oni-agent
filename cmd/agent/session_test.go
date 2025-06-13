@@ -166,8 +166,8 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			},
 		},
 		"invalid xml": {
-			name:       "invalid xml",
-			inputData:  "<root><invalid></root>\n\nEND\n",
+			name:      "invalid xml",
+			inputData: "<root><invalid></root>\n\nEND\n",
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusError,
@@ -176,8 +176,8 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			},
 		},
 		"successful load": {
-			name:       "successful load",
-			inputData:  "<root><title>Test Title</title></root>\n\nEND\n",
+			name:      "successful load",
+			inputData: "<root><title>Test Title</title></root>\n\nEND\n",
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusSuccess,
@@ -188,8 +188,8 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			},
 		},
 		"failed load": {
-			name:       "failed load",
-			inputData:  "<root>fail</root>\n\nEND\n",
+			name:      "failed load",
+			inputData: "<root>fail</root>\n\nEND\n",
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusError,

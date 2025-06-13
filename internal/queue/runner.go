@@ -11,8 +11,8 @@ import (
 // command-line tasks, but could be used for other tasks if there's a need to
 // expose more information to callers.
 type runner interface {
- Start(ctx context.Context) error
- Wait() error
- Stdout() logstream.Stream
- Stderr() logstream.Stream
+	Start(ctx context.Context) error
+	Wait() error
+	Stdout() logstream.Stream
+	Stderr() logstream.Stream
 }
