@@ -273,12 +273,12 @@ func (s session) getJobStatus(arg string) {
 	case queue.StatusStarted:
 		message = "Started: this job is currently running."
 	case queue.StatusFailStart:
-		jobdata["error"] = j.Error()
+		jobdata["error"] = j.Error().Error()
 		message = "Invalid: this job was not able to start."
 	case queue.StatusSuccessful:
 		message = "Success: this job is complete."
 	case queue.StatusFailed:
-		jobdata["error"] = j.Error()
+		jobdata["error"] = j.Error().Error()
 		message = "Failed: this job started but returned a non-zero exit code."
 	default:
 		s.logError("Invalid job status", "jobID", j.ID(), "jobStatus", j.Status())
