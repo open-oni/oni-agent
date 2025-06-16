@@ -107,7 +107,7 @@ func (m *mockSessionIO) getResponseData(t *testing.T) *testResponse {
 	var resp testResponse
 	var err = json.Unmarshal(m.output.Bytes(), &resp)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal response JSON: %v\nRaw output: %s", err, m.output.String())
+		t.Fatalf("Failed to unmarshal response JSON: %v\nRaw output: %q", err, m.output.String())
 	}
 	return &resp
 }
