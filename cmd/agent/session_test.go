@@ -2,17 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-oni/oni-agent/internal/logstream"
 	"github.com/open-oni/oni-agent/internal/queue"
+	"github.com/open-oni/oni-agent/internal/venv"
 	"github.com/open-oni/oni-agent/internal/version"
 )
 
@@ -81,6 +85,8 @@ type sessionResponse struct {
 }
 
 type jobResponse struct {
+	ID     int64    `json:",omitempty"`
+	Status string   `json:",omitempty"`
 	Stdout []string `json:",omitempty"`
 	Stderr []string `json:",omitempty"`
 	Error  string
@@ -101,7 +107,7 @@ func (m *mockSessionIO) getResponseData(t *testing.T) *testResponse {
 	var resp testResponse
 	var err = json.Unmarshal(m.output.Bytes(), &resp)
 	if err != nil {
-		t.Fatalf("Failed to unmarshal response JSON: %v\nRaw output: %s", err, m.output.String())
+		t.Fatalf("Failed to unmarshal response JSON: %v\nRaw output: %q", err, m.output.String())
 	}
 	return &resp
 }
@@ -113,7 +119,8 @@ func setup(t *testing.T) {
 	}
 
 	ONILocation = filepath.Join(wd, "testdata", "session")
-	JobRunner = queue.New(ONILocation)
+	venv.Activate(ONILocation)
+	JobRunner = queue.New()
 }
 
 func TestSession_VersionCommand(t *testing.T) {
@@ -151,11 +158,14 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 		name         string
 		inputData    string
 		inputError   error
+		expectJob    bool
 		expectedResp *testResponse
+		expectedLogs *testResponse
 	}{
 		"read error": {
 			name:       "read error",
 			inputError: fmt.Errorf("simulated read error"),
+			expectJob:  false,
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusError,
@@ -164,8 +174,9 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			},
 		},
 		"invalid xml": {
-			name:       "invalid xml",
-			inputData:  "<root><invalid></root>\n\nEND\n",
+			name:      "invalid xml",
+			inputData: "<root><invalid></root>\n\nEND\n",
+			expectJob: false,
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusError,
@@ -174,28 +185,42 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			},
 		},
 		"successful load": {
-			name:       "successful load",
-			inputData:  "<root><title>Test Title</title></root>\n\nEND\n",
+			name:      "successful load",
+			inputData: "<root><title>Test Title</title></root>\n\nEND\n",
+			expectJob: true,
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusSuccess,
-				Message: "MARC XML Received",
+				Message: "Success: this job is complete.",
 				Job: jobResponse{
-					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] Loading titles from XML: "<root><title>Test Title</title></root>"`},
+					Status: "successful",
 				},
+			},
+			expectedLogs: jobResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusSuccess,
+				Message: "foo",
+				Stdout: []string{`[2024-09-25T00:00:01.987654321Z] Loading titles from XML: "<root><title>Test Title</title></root>"`},
 			},
 		},
 		"failed load": {
-			name:       "failed load",
-			inputData:  "<root>fail</root>\n\nEND\n",
+			name:      "failed load",
+			inputData: "<root>fail</root>\n\nEND\n",
+			expectJob: true,
 			expectedResp: &testResponse{
 				Session: sessionResponse{ID: 456},
-				Status:  StatusError,
-				Message: "Internal error, unable to ingest MARC",
-				Error:   "exit status 1",
+				Status:  StatusSuccess,
+				Message: "Failed: this job started but returned a non-zero exit code.",
 				Job: jobResponse{
-					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] You asked for failure, bruh!`},
+					Status: "failed",
+					Error:  "running load_titles: exit status 1",
 				},
+			},
+			expectedLogs: &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusSuccess,
+				Message: "foo",
+				Stdout: []string{`[2024-09-25T00:00:01.987654321Z] You asked for failure, bruh!`},
 			},
 		},
 	}
@@ -223,17 +248,79 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			// Exit should always be called, and always with a zero status (see
 			// [session.close] for details)
 			if !mockIO.exitCalled {
-				t.Errorf("Exit() should have been called")
+				t.Fatal("Exit() should have been called")
 			}
 			if mockIO.exitCode != 0 {
-				t.Errorf("Expected exit code 0, got %d", mockIO.exitCode)
+				t.Fatalf("Expected exit code 0, got %d", mockIO.exitCode)
 			}
 
 			var got = mockIO.getResponseData(t)
-			var diff = cmp.Diff(tc.expectedResp, got)
+
+			// If we don't expect a job, the test here is simple, so let's just do it
+			// first and exit early
+			if !tc.expectJob {
+				var diff = cmp.Diff(tc.expectedResp, got)
+				if diff != "" {
+					t.Fatal(diff)
+				}
+				return
+			}
+
+			// We expect a job: we make sure we got one, poll until it's complete,
+			// check its response, and then check its logs
+			var jobid = got.Job.ID
+			var expected = &testResponse{
+				Session: sessionResponse{ID: 456},
+				Status:  StatusSuccess,
+				Message: "Job added to queue",
+				Job:     got.Job,
+			}
+			var diff = cmp.Diff(expected, got)
 			if diff != "" {
-				t.Errorf(diff)
+				t.Fatal(diff)
+			}
+
+			// Wait for the job to finish and check the job-status response. We have
+			// to hack in the job id since the expected response had no way to know
+			// what it would be assigned
+			var idstr = strconv.FormatInt(jobid, 10)
+			got = awaitJob(t, idstr)
+			tc.expectedResp.Job.ID = jobid
+			diff = cmp.Diff(tc.expectedResp, got)
+			if diff != "" {
+				t.Fatal(diff)
+			}
+
+			// Request job logs and verify that response matches our expected job
+			// logs response
+			mockIO = newMockSessionIO([]string{"job-logs", idstr})
+			s.handle()
+			tc.expectedLogs.Job.ID = jobid
+			diff = cmp.Diff(tc.expectedLogs, got)
+			if diff != "" {
+				t.Fatal(diff)
 			}
 		})
 	}
+}
+
+// awaitJob loops job-status calls until the response marks it as completed.
+// The response is then returned.
+func awaitJob(t *testing.T, id string) (resp *testResponse) {
+	var st = queue.StatusPending
+	var ctx, cancel = context.WithCancel(context.Background())
+	go JobRunner.Wait(ctx)
+	for st == queue.StatusPending || st == queue.StatusStarted {
+		time.Sleep(time.Millisecond * 50)
+
+		var mockIO = newMockSessionIO([]string{"job-status", id})
+		var s = session{io: mockIO, id: 456}
+		s.handle()
+		resp = mockIO.getResponseData(t)
+		slog.Info("Call complete", "response", resp)
+		st = queue.JobStatus(resp.Job.Status)
+	}
+
+	cancel()
+	return resp
 }

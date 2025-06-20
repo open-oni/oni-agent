@@ -20,6 +20,7 @@ import (
 	gliderssh "github.com/gliderlabs/ssh"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/open-oni/oni-agent/internal/queue"
+	"github.com/open-oni/oni-agent/internal/venv"
 	"github.com/open-oni/oni-agent/internal/version"
 	"golang.org/x/crypto/ssh"
 )
@@ -167,7 +168,8 @@ func generateKey(filename string) (ssh.Signer, error) {
 
 func main() {
 	getEnvironment()
-	JobRunner = queue.New(ONILocation)
+	venv.Activate(ONILocation)
+	JobRunner = queue.New()
 
 	var srv = &gliderssh.Server{Addr: BABind}
 	srv.AddHostKey(HostKeySigner)
@@ -193,7 +195,7 @@ func main() {
 	// This functions as an on-startup sanity check to verify that the agent can
 	// in fact call ONI commands with its current configuration
 	slog.Info("Checking ONI install")
-	var j = JobRunner.NewJob("ONI Check", []string{"check"})
+	var j = JobRunner.NewONIJob("ONI Check", []string{"check"})
 	j.Run(ctx)
 	switch j.Status() {
 	case queue.StatusSuccessful:

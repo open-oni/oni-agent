@@ -87,7 +87,7 @@ func (s *Stream) Write(data []byte) (n int, err error) {
 // Timestamped returns the captured output, prefixed with an RFC 3339-formatted
 // timestamp per line. The final value, if present, is given the timestamp of
 // when it was last written to.
-func (s *Stream) Timestamped() []string {
+func (s Stream) Timestamped() []string {
 	var out []string
 	for _, log := range s.Logs {
 		out = append(out, log.String())

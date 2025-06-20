@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strconv"
 	"sync/atomic"
@@ -142,18 +140,20 @@ func (s session) handle() {
 	}
 }
 
-func (s session) loadTitle() {
+// readAll reads whatever data was written to the ssh channel and returns it.
+// The read will continue indefinitely, stopping only when the magic string
+// "\n\nEND\n" is seen at the end of the buffer.
+func (s session) readAll() ([]byte, error) {
 	// Create a ~100k data-receiving buffer
 	var data = make([]byte, 100_000)
 
-	var marcData []byte
+	var output []byte
 	for {
 		var n, err = s.io.Read(data)
 		if err != nil {
-			slog.Error("Unable to read from client", "error", err)
-			s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
-			return
+			return output, err
 		}
+
 		var got = data[:n]
 		var reported string
 		if n > 1200 {
@@ -161,67 +161,40 @@ func (s session) loadTitle() {
 		} else {
 			reported = string(got)
 		}
-		slog.Info("Got data", "size", n, "data", reported)
+		slog.Debug("Read data from ssh client", "size", n, "data", reported)
 
-		marcData = append(marcData, got...)
-		var l = len(marcData)
-		if l > 6 && string(marcData[l-6:]) == "\n\nEND\n" {
-			marcData = marcData[:l-6]
+		output = append(output, got...)
+		var l = len(output)
+		if l > 6 && string(output[l-6:]) == "\n\nEND\n" {
+			output = output[:l-6]
 			break
 		}
 	}
 
+	return output, nil
+}
+
+func (s session) loadTitle() {
+	var marcData, err = s.readAll()
+	if err != nil {
+		slog.Error("Unable to read from client", "error", err)
+		s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
+		return
+	}
+
 	// Parse the data to ensure it's valid
 	var node = &xmlnode.Node{}
-	var err = xml.Unmarshal(marcData, node)
+	err = xml.Unmarshal(marcData, node)
 	if err != nil {
 		slog.Error("Invalid XML", "error", err)
 		s.respond(StatusError, "Invalid data", H{"error": err.Error()})
 		return
 	}
 
-	// Create a self-deleting temp dir
-	var dir string
-	dir, err = os.MkdirTemp("", "*-oni-marc")
-	if err != nil {
-		slog.Error("Unable to create temp dir", "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
-		return
-	}
-	defer os.Remove(dir)
+	var j = JobRunner.NewLoadTitleJob(marcData)
+	JobRunner.Push(j)
 
-	// Write the MARC record out and tell ONI to ingest it
-	var fpath = filepath.Join(dir, "marc.xml")
-	err = os.WriteFile(fpath, marcData, 0600)
-	if err != nil {
-		slog.Error("Unable to write MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error()})
-		return
-	}
-
-	var j = JobRunner.NewJob("Load title from MARC XML", []string{"load_titles", dir})
-	err = j.Run(context.Background())
-
-	var jobData = H{
-		"id":     j.ID(),
-		"name":   j.Name(),
-		"status": j.Status(),
-		"stdout": j.Stdout(),
-		"stderr": j.Stderr(),
-	}
-
-	if err != nil {
-		slog.Error("Error ingesting MARC XML", "path", fpath, "error", err)
-		s.respond(StatusError, "Internal error, unable to ingest MARC", H{"error": err.Error(), "job": jobData})
-		return
-	}
-
-	// We only remove the file if there were no load errors. This leaves a mess
-	// but also allows debugging.
-	os.Remove(fpath)
-
-	slog.Info("Received data", "marc", string(marcData))
-	s.respond(StatusSuccess, "MARC XML Received", H{"job": jobData})
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
 }
 
 func (s session) loadBatch(name string) {
@@ -243,7 +216,7 @@ func (s session) loadBatch(name string) {
 		s.respond(StatusError, fmt.Sprintf("%q cannot be loaded", name), H{"error": err.Error()})
 		return
 	}
-	s.queueJob("Load batch", "load_batch", []string{batchPath})
+	s.queueONIJob("Load batch", "load_batch", []string{batchPath})
 }
 
 func (s session) purgeBatch(name string) {
@@ -258,7 +231,7 @@ func (s session) purgeBatch(name string) {
 		s.respondNoJob()
 		return
 	}
-	s.queueJob("Purge batch", "purge_batch", []string{name})
+	s.queueONIJob("Purge batch", "purge_batch", []string{name})
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
@@ -300,12 +273,12 @@ func (s session) getJobStatus(arg string) {
 	case queue.StatusStarted:
 		message = "Started: this job is currently running."
 	case queue.StatusFailStart:
-		jobdata["error"] = j.Error()
+		jobdata["error"] = j.Error().Error()
 		message = "Invalid: this job was not able to start."
 	case queue.StatusSuccessful:
 		message = "Success: this job is complete."
 	case queue.StatusFailed:
-		jobdata["error"] = j.Error()
+		jobdata["error"] = j.Error().Error()
 		message = "Failed: this job started but returned a non-zero exit code."
 	default:
 		s.logError("Invalid job status", "jobID", j.ID(), "jobStatus", j.Status())
@@ -337,11 +310,12 @@ func (s session) respondNoJob() {
 	s.respond(StatusSuccess, "No-op: job is redundant or already completed", H{"job": H{"id": queue.NoOpJob().ID()}})
 }
 
-func (s session) queueJob(name, command string, args []string) {
+func (s session) queueONIJob(name, command string, args []string) {
 	var combined = append([]string{command}, args...)
-	var id = JobRunner.QueueJob(name, combined)
+	var j = JobRunner.NewONIJob(name, combined)
+	JobRunner.Push(j)
 
-	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": id}})
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
 }
 
 func (s session) ensureAwardee(code string, name string) {

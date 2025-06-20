@@ -4,63 +4,25 @@ package queue
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
 // Queue holds the list of ONI jobs we need to run
 type Queue struct {
-	m       sync.RWMutex
-	seq     int64
-	lookup  map[int64]*Job
-	binpath string
-	env     []string
-	queue   chan *Job
+	m      sync.RWMutex
+	seq    int64
+	lookup map[int64]*Job
+	queue  chan *Job
 }
 
 // New provides a new job queue
-func New(oniPath string) *Queue {
-	var binpath = filepath.Join(oniPath, "manage.py")
-	var q = &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000), binpath: binpath}
-
-	// We store the env vars needed to emulate Python's virtual environment,
-	// which essentially operates by setting three env vars. There's other stuff
-	// for changing the prompt, storing info for deactivation, etc., but this is
-	// the only part that matters for executing the "manage.py" script:
-	//
-	//   - export VIRTUAL_ENV=/opt/openoni/ENV
-	//   - export PATH="$VIRTUAL_ENV/bin:$PATH"
-	//   - unset PYTHONHOME
-	//
-	// The last item is "free" because we just don't set anything to begin with
-
-	var eVars = os.Environ()
-	var path []string
-	var pathListSeparator = string(os.PathListSeparator)
-	for _, val := range eVars {
-		var parts = strings.SplitN(val, "=", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		if parts[0] == "PATH" {
-			path = strings.Split(parts[1], pathListSeparator)
-		}
-	}
-	var envPath = filepath.Join(oniPath, "ENV")
-	var binPath = filepath.Join(envPath, "bin")
-	path = append([]string{binPath}, path...)
-	q.env = append(q.env, "VIRTUAL_ENV="+envPath)
-	q.env = append(q.env, "PATH="+strings.Join(path, pathListSeparator))
-
-	return q
+func New() *Queue {
+	return &Queue{lookup: make(map[int64]*Job), queue: make(chan *Job, 1000)}
 }
 
-// NewJob returns a Job set up to call ONI with the given args
-func (q *Queue) NewJob(name string, args []string) *Job {
+func (q *Queue) newJob(name string, r runner) *Job {
 	q.m.Lock()
 	defer q.m.Unlock()
 
@@ -70,12 +32,10 @@ func (q *Queue) NewJob(name string, args []string) *Job {
 	var purgeTime = time.Now().Add(time.Hour * 24 * 30)
 	q.seq++
 	var j = &Job{
-		name:    name,
-		bin:     q.binpath,
-		env:     q.env,
-		args:    args,
 		id:      q.seq,
+		name:    name,
 		status:  StatusPending,
+		runner:  r,
 		purgeAt: purgeTime,
 	}
 	q.lookup[j.id] = j
@@ -83,14 +43,22 @@ func (q *Queue) NewJob(name string, args []string) *Job {
 	return j
 }
 
-// QueueJob queues up a new ONI management command from the given args, and
-// returns the queued job's id
-func (q *Queue) QueueJob(name string, args []string) int64 {
-	var j = q.NewJob(name, args)
+// Push appends j to the job queue
+func (q *Queue) Push(j *Job) {
 	j.queuedAt = time.Now()
 	q.queue <- j
+}
 
-	return j.id
+// NewONIJob returns a Job set up to do a single ONI `manage.py` call with the
+// given args
+func (q *Queue) NewONIJob(name string, args []string) *Job {
+	return q.newJob(name, newONIRunner(args))
+}
+
+// NewLoadTitleJob returns a job set up to load a title into ONI, as described
+// in the raw MARC xml passed in
+func (q *Queue) NewLoadTitleJob(xml []byte) *Job {
+	return q.newJob("load title", newLoadTitleRunner(xml))
 }
 
 // GetJob returns a job by its id
