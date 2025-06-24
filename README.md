@@ -187,15 +187,15 @@ integration otherwise.
 Open ONI currently has only web listeners which are proxied from Apache, or CLI
 management commands that have to be invoked manually by opening a shell on a
 server / in a container. Adding REST endpoints has proven more complex than
-expected, because loading large batches can several minutes. In rare cases,
+expected, because loading large batches can take several minutes. In rare cases,
 huge batches can even take an hour to load. In HTTP-land, this is an eternity.
 
-A client can't expect to hold a connection that long, and continuing the REST
-request after disconnect takes a bit of tomfoolery that starts to get brittle.
-Then there's Apache reaping processes semi-randomly when RAM starts to balloon,
-state needing to be held in a new ONI database table, new endpoints to check if
-a long-running process is done, the complexity of locking down REST endpoints
-to only authorized connections, ....
+An HTTP client can't expect to hold a connection that long, and continuing the
+REST request after disconnect takes a bit of tomfoolery that starts to get
+brittle. Then there's Apache reaping processes semi-randomly when RAM starts to
+balloon, state needing to be held in a new ONI database table, new endpoints to
+check if a long-running process is done, the complexity of locking down REST
+endpoints to only authorized connections, ....
 
 A true background job runner quickly proved to be out of scope for our
 timeline, and remotely connecting to a real bash shell was not only risky, but
