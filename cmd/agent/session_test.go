@@ -196,11 +196,14 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 					Status: "successful",
 				},
 			},
-			expectedLogs: jobResponse{
+			expectedLogs: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusSuccess,
-				Message: "foo",
-				Stdout: []string{`[2024-09-25T00:00:01.987654321Z] Loading titles from XML: "<root><title>Test Title</title></root>"`},
+				Message: "",
+				Job: jobResponse{
+					Status: "successful",
+					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] Loading titles from XML: "<root><title>Test Title</title></root>"`},
+				},
 			},
 		},
 		"failed load": {
@@ -219,8 +222,11 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			expectedLogs: &testResponse{
 				Session: sessionResponse{ID: 456},
 				Status:  StatusSuccess,
-				Message: "foo",
-				Stdout: []string{`[2024-09-25T00:00:01.987654321Z] You asked for failure, bruh!`},
+				Message: "",
+				Job: jobResponse{
+					Status: "failed",
+					Stdout: []string{`[2024-09-25T00:00:01.987654321Z] You asked for failure, bruh!`},
+				},
 			},
 		},
 	}
@@ -294,7 +300,9 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 			// Request job logs and verify that response matches our expected job
 			// logs response
 			mockIO = newMockSessionIO([]string{"job-logs", idstr})
+			s = session{io: mockIO, id: 456}
 			s.handle()
+			got = mockIO.getResponseData(t)
 			tc.expectedLogs.Job.ID = jobid
 			diff = cmp.Diff(tc.expectedLogs, got)
 			if diff != "" {
