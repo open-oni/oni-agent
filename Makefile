@@ -20,3 +20,7 @@ lint:
 .PHONY: clean
 clean:
 	rm -f bin/*
+
+.PHONY: audit
+audit:
+	go tool govulncheck ./...
