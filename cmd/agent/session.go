@@ -1,15 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"strconv"
 	"sync/atomic"
 
+	"github.com/open-oni/oni-agent/internal/batchpatch"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
 	"github.com/uoregon-libraries/gopkg/xmlnode"
@@ -125,6 +128,9 @@ func (s session) handle() {
 		}
 		s.purgeBatch(args[0])
 
+	case "batch-patch":
+		s.batchPatch()
+
 	case "ensure-awardee":
 		if len(args) < 1 || len(args) > 2 {
 			s.respond(StatusError, fmt.Sprintf("%q requires one or two args: MARC org code and awardee name. Name is required if the awardee is to be auto-created.", command), nil)
@@ -234,6 +240,39 @@ func (s session) purgeBatch(name string) {
 		return
 	}
 	s.queueONIJob("Purge batch", "purge_batch", []string{name})
+}
+
+func (s session) batchPatch() {
+	var input, err = s.readAll()
+	if err != nil {
+		slog.Error("Unable to read from client", "error", err)
+		s.respond(StatusError, "Read error, connection terminating", H{"error": err.Error()})
+		return
+	}
+
+	// Parse the data into a batch-patch structure so we know it's valid
+	var bp *batchpatch.BatchPatch
+	bp, err = batchpatch.FromStream(bytes.NewBuffer(input))
+	if err != nil {
+		slog.Error("Invalid data for batch-patch command", "error", err)
+		s.respond(StatusError, "Invalid input data, connection terminating", H{"error": err.Error()})
+		return
+	}
+
+	// Make sure the named batch actually exists, at least as of right now. If it
+	// doesn't exist by the time the job runs, we'll error out then, but this at
+	// least gives more immediate feedback.
+	var exists bool
+	exists, err = checkBatch(bp.BatchName())
+	if err == nil && !exists {
+		err = errors.New("batch does not exist")
+	}
+	if err != nil {
+		s.respond(StatusError, fmt.Sprintf("%q cannot be modified", bp.BatchName()), H{"error": err.Error()})
+		return
+	}
+
+	// TODO: Data is good, batch exists. Create and queue up the job!
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
