@@ -141,11 +141,14 @@ $ ssh -p2222 nobody@localhost "job-status 7" | jq
 
 The following commands are currently available:
 
-- `version`: reports the version number of the agent
+- `load-title`: takes the ssh input, writes it out to a temporary location, and
+  tells ONI to ingest that as a MARC XML document representing a newspaper
+  title.
+- `version`: reports the version number of the agent.
 - `job-status <job id>`: Reports the status of the given job id: "pending",
-  "started", "couldn't start", "successful", or "failed"
+  "started", "couldn't start", "successful", or "failed".
 - `job-logs <job id>`: Reports the full list of a command's logs, with
-  timestamps added for clarity
+  timestamps added for clarity.
 - `load-batch <batch name>`: Creates a job to load the named batch, using the
   configured batch path combined with the batch name to find it on disk. The
   return includes a job ID for monitoring its status. A job ID of -1 indicates
