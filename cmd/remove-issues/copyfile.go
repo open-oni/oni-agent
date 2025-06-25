@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 )
 
 // copyfile is a general file-copying utility for ensuring that we gather (and
@@ -47,4 +48,22 @@ func copyfile(src, dest string) (err error) {
 	}
 
 	return
+}
+
+// copyWithRetry just calls copyFile with the ability to retry after failures,
+// for cases where network storage issues are temporarily giving us problems.
+// Each failure will just wait one second until it tries again, since many
+// problems (permissions, disk full, etc.) are fatal, and we don't want to hold
+// up a massive copy job for more than a few seconds if there's a "real"
+// problem that a retry won't help.
+func copyWithRetry(src, dest string, maxRetry int) (err error) {
+	for n := 0; n < maxRetry; n++ {
+		err = copyfile(src, dest)
+		if err == nil {
+			return err
+		}
+		time.Sleep(time.Second)
+	}
+
+	return err
 }

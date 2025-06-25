@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 var appName string
@@ -117,21 +116,12 @@ func run(args ...string) error {
 	}
 	conf.SkipDirs = batch.SkipDirs
 
-	// Crawl all files and determine the action necessary.  NOTE: this may not be
-	// the ideal number of workers.  On an SSD, it seems to work much faster than
-	// lower numbers.  One of the following must be true, but I dunno which:
-	// - Go's IO is really bad when not parallelized
-	// - My code is doing more CPU-intense logic than it seems like it should
-	// - SSD write queuing is just super amazing
-	var queue = NewWorkQueue(conf, 2*runtime.NumCPU())
-	var walker = NewWalker(conf, queue)
+	var walker = NewWalker(conf)
 	err = walker.Walk()
 	if err != nil {
 		return fmt.Errorf("walking batch files: %w", err)
 	}
 
-	// Wait for the queue to complete all actions/jobs
-	queue.Wait()
 	return nil
 }
 
@@ -141,4 +131,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %s", err)
 		os.Exit(1)
 	}
+
+	log.Printf("INFO: All files processed.")
 }
