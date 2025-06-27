@@ -18,7 +18,6 @@ type Worker struct {
 
 // Start listens for jobs until the work queue is closed
 func (w *Worker) Start() {
-	log.Printf("DEBUG: worker %d starting jobs", w.ID)
 	w.wg.Add(1)
 	for {
 		select {
@@ -29,29 +28,21 @@ func (w *Worker) Start() {
 			var isDone = w.done
 			w.Unlock()
 			if isDone {
-				log.Printf("INFO: worker %d exiting", w.ID)
 				w.wg.Done()
 				return
 			}
-			log.Printf("DEBUG: worker %d has nothing to do; sleeping", w.ID)
 			time.Sleep(time.Second)
 		}
 	}
 }
 
 func (w *Worker) Done() {
-	log.Printf("DEBUG: worker %d draining pool and exiting", w.ID)
 	w.Lock()
 	w.done = true
 	w.Unlock()
 }
 
 func (w *Worker) process(j *Job) {
-	if j.Failures > 0 {
-		log.Printf("DEBUG: worker %d Processing %s Job for %q (retry #%d)", w.ID, j.Type, j.DestPath, j.Failures)
-	} else {
-		log.Printf("DEBUG: worker %d Processing %s Job for %q", w.ID, j.Type, j.DestPath)
-	}
 	switch j.Type {
 	case FileCopy:
 		w.CopyFile(j)

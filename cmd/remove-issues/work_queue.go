@@ -70,13 +70,11 @@ func (q *WorkQueue) Add(sourcePath, destDir, baseName string) {
 	// Check if the directory is in the list of skipDirs
 	for _, skipDir := range q.skipDirs {
 		if strings.Contains(sourcePath, skipDir) {
-			log.Printf("INFO: skipping file %q: matches skipDir %q", sourcePath, skipDir)
 			return
 		}
 	}
 
 	if baseName == "batch.xml" {
-		log.Printf("INFO: skipping file %q: batch.XML", sourcePath)
 		return
 	}
 
@@ -94,13 +92,11 @@ func (q *WorkQueue) Add(sourcePath, destDir, baseName string) {
 	switch ext {
 	case "xml":
 		if baseName[len(baseName)-6:] == "_1.xml" {
-			log.Printf("INFO: skipping file %q: validated XML", sourcePath)
 			job.Type = FileSkip
 		} else {
 			job.Type = FileCopy
 		}
 	case "tif", "tiff":
-		log.Printf("INFO: skipping file %q: TIFF", sourcePath)
 		job.Type = FileSkip
 	default:
 		job.Type = FileCopy
@@ -110,7 +106,6 @@ func (q *WorkQueue) Add(sourcePath, destDir, baseName string) {
 		return
 	}
 
-	log.Printf("INFO: queueing job for %q (destination %q, type %s)", sourcePath, destDir, job.Type)
 	q.queue <- job
 }
 

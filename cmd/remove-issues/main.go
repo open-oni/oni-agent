@@ -74,9 +74,6 @@ func getArgs(args []string) (*config, error) {
 		return nil, fmt.Errorf("getting absolute path: %w", err)
 	}
 
-	fmt.Printf("\033[1mInput dirs:\033[0m\n  - Source: %q\n  - Dest: %q\n", src, dst)
-	fmt.Printf("\033[32;1mCleaned dirs:\033[0m\n  - Source %q\n  - Dest: %q\n\n", conf.SourceDir, conf.DestDir)
-
 	var info os.FileInfo
 	info, err = os.Stat(conf.SourceDir)
 	if err != nil {
