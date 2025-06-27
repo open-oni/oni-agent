@@ -8,7 +8,9 @@ import (
 	"runtime"
 )
 
-func usageError(msg string, args ...interface{}) {
+var appName string
+
+func printUsage(msg string, args ...interface{}) {
 	var fmsg = fmt.Sprintf(msg, args...)
 	fmt.Printf("\033[31;1mERROR: %s\033[0m\n", fmsg)
 	fmt.Printf(`
@@ -22,8 +24,7 @@ batch.
 One or more issue keys must be present.  If any key is given but isn't in the
 source batch, this tool will report it and exit without processing any other
 keys, even if they're valid.
-`, os.Args[0])
-	os.Exit(1)
+`, appName)
 }
 
 // config just holds the app's directory/lccn context so we don't have global
@@ -36,27 +37,41 @@ type config struct {
 	SkipDirs  []string
 }
 
+type usageError string
+
+func newUsageError(format string, args ...any) usageError {
+	return usageError(fmt.Sprintf(format, args...))
+}
+
+func (u usageError) Error() string {
+	return string(u)
+}
+
 // getArgs does some sanity-checking and sets the source/dest args
-func getArgs() *config {
-	if len(os.Args) < 4 {
-		usageError("Missing one or more arguments")
+func getArgs(args []string) (*config, error) {
+	if len(args) < 1 {
+		panic("missing args[0]!")
+	}
+	appName = args[0]
+	if len(args) < 4 {
+		return nil, newUsageError("missing one or more arguments")
 	}
 
-	var src = os.Args[1]
-	var dst = os.Args[2]
+	var src = args[1]
+	var dst = args[2]
 	var conf = &config{
 		SourceDir: src,
 		DestDir:   dst,
-		IssueKeys: os.Args[3:],
+		IssueKeys: args[3:],
 	}
 	var err error
 	conf.SourceDir, err = filepath.Abs(conf.SourceDir)
 	if err != nil {
-		usageError("Source (%s) is invalid: %s", src, err)
+		return nil, fmt.Errorf("getting absolute path: %w", err)
 	}
 	conf.DestDir, err = filepath.Abs(conf.DestDir)
 	if err != nil {
-		usageError("Destination (%s) is invalid: %s", dst, err)
+		return nil, fmt.Errorf("getting absolute path: %w", err)
 	}
 
 	fmt.Printf("\033[1mInput dirs:\033[0m\n  - Source: %q\n  - Dest: %q\n", src, dst)
@@ -65,35 +80,44 @@ func getArgs() *config {
 	var info os.FileInfo
 	info, err = os.Stat(conf.SourceDir)
 	if err != nil {
-		usageError("Source (%s) is invalid: %s", conf.SourceDir, err)
+		return nil, newUsageError("invalid source (%q): %s", conf.SourceDir, err)
 	}
 	if !info.IsDir() {
-		usageError("Source (%s) is invalid: not a directory", conf.SourceDir)
+		return nil, newUsageError("invalid source (%q): not a directory", conf.SourceDir)
 	}
 
 	_, err = os.Stat(conf.DestDir)
 	if err == nil || !os.IsNotExist(err) {
-		usageError("Destination (%s) already exists", conf.DestDir)
+		return nil, newUsageError("invalid destination (%q): already exists", conf.DestDir)
 	}
 
-	return conf
+	return conf, nil
 }
 
-func main() {
-	var conf = getArgs()
+// run contains the main logic of the application, allowing it to be called
+// from tests without exiting the program
+func run(args ...string) error {
+	var conf, err = getArgs(args)
+	if err != nil {
+		return fmt.Errorf("getting options from args: %w", err)
+	}
 
 	// Read the batch XML to get a list of issue directories to skip
 	var batchPath = filepath.Join(conf.SourceDir, "data", "batch.xml")
 	var newBatchPath = filepath.Join(conf.DestDir, "data", "batch.xml")
 
 	log.Printf("INFO: Reading source batch XML %q", batchPath)
-	var batch, err = ParseBatch(batchPath, conf.IssueKeys)
+	var batch *batchXML
+	batch, err = ParseBatch(batchPath, conf.IssueKeys)
 	if err != nil {
-		log.Fatalf("ERROR: Unable to process batch XML file %q: %s", batchPath, err)
+		return fmt.Errorf("parsing batch: %w", err)
 	}
 
 	log.Printf("INFO: Writing new batch XML to %q", newBatchPath)
 	err = batch.WriteBatchXML(newBatchPath)
+	if err != nil {
+		return fmt.Errorf("writing batch: %w", err)
+	}
 	conf.SkipDirs = batch.SkipDirs
 
 	// Crawl all files and determine the action necessary.  NOTE: this may not be
@@ -106,9 +130,18 @@ func main() {
 	var walker = NewWalker(conf, queue)
 	err = walker.Walk()
 	if err != nil {
-		log.Fatalf("Error trying to copy/fix the batch: %s\n", err)
+		return fmt.Errorf("walking batch files: %w", err)
 	}
 
 	// Wait for the queue to complete all actions/jobs
 	queue.Wait()
+	return nil
+}
+
+func main() {
+	var err = run(os.Args...)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %s", err)
+		os.Exit(1)
+	}
 }
