@@ -46,12 +46,12 @@ type WorkQueue struct {
 }
 
 // NewWorkQueue creates n workers and starts them listening for jobs
-func NewWorkQueue(ctx *FixContext, n int) *WorkQueue {
+func NewWorkQueue(conf *config, n int) *WorkQueue {
 	var q = &WorkQueue{
 		workers:  make([]*Worker, n),
 		queue:    make(chan *Job, 100000),
 		wg:       new(sync.WaitGroup),
-		skipDirs: ctx.SkipDirs,
+		skipDirs: conf.SkipDirs,
 	}
 
 	for i := 0; i < n; i++ {
