@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/spf13/afero"
 )
 
 var appName string
@@ -34,6 +36,7 @@ type config struct {
 	DestDir   string
 	IssueKeys []string
 	SkipDirs  []string
+	FS        afero.Fs
 }
 
 type usageError string
@@ -47,7 +50,7 @@ func (u usageError) Error() string {
 }
 
 // getArgs does some sanity-checking and sets the source/dest args
-func getArgs(args []string) (*config, error) {
+func getArgs(fs afero.Fs, args []string) (*config, error) {
 	if len(args) < 1 {
 		panic("missing args[0]!")
 	}
@@ -62,6 +65,7 @@ func getArgs(args []string) (*config, error) {
 		SourceDir: src,
 		DestDir:   dst,
 		IssueKeys: args[3:],
+		FS:        fs,
 	}
 	var err error
 	conf.SourceDir, err = filepath.Abs(conf.SourceDir)
@@ -74,7 +78,7 @@ func getArgs(args []string) (*config, error) {
 	}
 
 	var info os.FileInfo
-	info, err = os.Stat(conf.SourceDir)
+	info, err = conf.FS.Stat(conf.SourceDir)
 	if err != nil {
 		return nil, newUsageError("invalid source (%q): %s", conf.SourceDir, err)
 	}
@@ -82,7 +86,7 @@ func getArgs(args []string) (*config, error) {
 		return nil, newUsageError("invalid source (%q): not a directory", conf.SourceDir)
 	}
 
-	_, err = os.Stat(conf.DestDir)
+	_, err = conf.FS.Stat(conf.DestDir)
 	if err == nil || !os.IsNotExist(err) {
 		return nil, newUsageError("invalid destination (%q): already exists", conf.DestDir)
 	}
@@ -92,8 +96,8 @@ func getArgs(args []string) (*config, error) {
 
 // run contains the main logic of the application, allowing it to be called
 // from tests without exiting the program
-func run(args ...string) error {
-	var conf, err = getArgs(args)
+func run(fs afero.Fs, args ...string) error {
+	var conf, err = getArgs(fs, args)
 	if err != nil {
 		return fmt.Errorf("getting options from args: %w", err)
 	}
@@ -104,13 +108,13 @@ func run(args ...string) error {
 
 	log.Printf("INFO: Reading source batch XML %q", batchPath)
 	var batch *batchXML
-	batch, err = ParseBatch(batchPath, conf.IssueKeys)
+	batch, err = ParseBatch(conf.FS, batchPath, conf.IssueKeys)
 	if err != nil {
 		return fmt.Errorf("parsing batch: %w", err)
 	}
 
 	log.Printf("INFO: Writing new batch XML to %q", newBatchPath)
-	err = batch.WriteBatchXML(newBatchPath)
+	err = batch.WriteBatchXML(conf.FS, newBatchPath)
 	if err != nil {
 		return fmt.Errorf("writing batch: %w", err)
 	}
@@ -126,7 +130,7 @@ func run(args ...string) error {
 }
 
 func main() {
-	var err = run(os.Args...)
+	var err = run(afero.NewOsFs(), os.Args...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s", err)
 		os.Exit(1)

@@ -3,28 +3,29 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"time"
+
+	"github.com/spf13/afero"
 )
 
 // copyfile is a general file-copying utility for ensuring that we gather (and
 // return) all possible errors as well as we can
-func copyfile(src, dest string) (err error) {
+func copyfile(fs afero.Fs, src, dest string) (err error) {
 	// Allow for the possibility of src and dest being the same file, in which
 	// case our job is already done
 	if src == dest {
 		return
 	}
 
-	var in, out *os.File
+	var in, out afero.File
 
-	in, err = os.Open(src)
+	in, err = fs.Open(src)
 	if err != nil {
 		return fmt.Errorf("unable to read %q: %s", src, err)
 	}
 	defer in.Close()
 
-	out, err = os.Create(dest)
+	out, err = fs.Create(dest)
 	if err != nil {
 		return fmt.Errorf("unable to create %q: %q", dest, err)
 	}
@@ -56,9 +57,9 @@ func copyfile(src, dest string) (err error) {
 // problems (permissions, disk full, etc.) are fatal, and we don't want to hold
 // up a massive copy job for more than a few seconds if there's a "real"
 // problem that a retry won't help.
-func copyWithRetry(src, dest string, maxRetry int) (err error) {
+func copyWithRetry(fs afero.Fs, src, dest string, maxRetry int) (err error) {
 	for n := 0; n < maxRetry; n++ {
-		err = copyfile(src, dest)
+		err = copyfile(fs, src, dest)
 		if err == nil {
 			return err
 		}

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 const pathSeparator = string(os.PathSeparator)
@@ -14,7 +16,7 @@ const pathSeparator = string(os.PathSeparator)
 // context we need to know how to start jobs and translate a source file to
 // where we'll want it to end up
 type Walker struct {
-	conf  *config
+	conf *config
 }
 
 // NewWalker returns a new Walker instance with the given context. Why did I
@@ -29,7 +31,7 @@ func NewWalker(conf *config) *Walker {
 // (which needs to be rewritten outside the file copy), validated XMLs (the
 // various *_1.xml files), and TIFFs.
 func (w *Walker) Walk() error {
-	return filepath.Walk(w.conf.SourceDir, w.walkFunc)
+	return afero.Walk(w.conf.FS, w.conf.SourceDir, w.walkFunc)
 }
 
 func (w *Walker) walkFunc(path string, info os.FileInfo, err error) error {
@@ -65,7 +67,7 @@ func (w *Walker) walkFunc(path string, info os.FileInfo, err error) error {
 	}
 
 	// Create the destination directory if it doesn't exist
-	err = os.MkdirAll(destPath, 0755)
+	err = w.conf.FS.MkdirAll(destPath, 0755)
 	if err != nil {
 		log.Printf("ERROR: could not create %q: %s", destPath, err)
 		return err
@@ -86,7 +88,7 @@ func (w *Walker) walkFunc(path string, info os.FileInfo, err error) error {
 	}
 
 	log.Printf("INFO: copying file %q to %q", path, destFile)
-	err = copyWithRetry(path, destFile, 5)
+	err = copyWithRetry(w.conf.FS, path, destFile, 5)
 	if err != nil {
 		return fmt.Errorf("copying %q to %q: %w", path, destFile, err)
 	}

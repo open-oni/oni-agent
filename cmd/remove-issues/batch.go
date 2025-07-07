@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
 type batchXML struct {
@@ -40,8 +40,8 @@ type reelXML struct {
 // ParseBatch reads the given XML file and processes it into batch data.  The
 // skipKeys are converted into directories that should be skipped from the
 // copy, and stored in the returned structure's SkipDirs field.
-func ParseBatch(pth string, skipKeys []string) (*batchXML, error) {
-	var data, err = ioutil.ReadFile(pth)
+func ParseBatch(fs afero.Fs, pth string, skipKeys []string) (*batchXML, error) {
+	var data, err = afero.ReadFile(fs, pth)
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +85,9 @@ func ParseBatch(pth string, skipKeys []string) (*batchXML, error) {
 	return b, nil
 }
 
-func (b *batchXML) WriteBatchXML(pth string) error {
+func (b *batchXML) WriteBatchXML(fs afero.Fs, pth string) error {
 	var dir, _ = filepath.Split(pth)
-	var err = os.MkdirAll(dir, 0755)
+	var err = fs.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (b *batchXML) WriteBatchXML(pth string) error {
 
 	var output = append([]byte(xml.Header), data...)
 
-	return ioutil.WriteFile(pth, output, 0644)
+	return afero.WriteFile(fs, pth, output, 0644)
 }
 
 func keyfix(key string) string {
