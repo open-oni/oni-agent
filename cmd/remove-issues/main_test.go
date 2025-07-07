@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -12,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/spf13/afero"
 )
 
-func findAll(dir fs.FS) (paths []string, err error) {
-	err = fs.WalkDir(dir, ".", func(pth string, _ fs.DirEntry, err error) error {
+func findAll(fs afero.Fs, dir string) (paths []string, err error) {
+	var sub = afero.NewBasePathFs(fs, dir)
+	err = afero.Walk(sub, "/", func(pth string, _ os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -32,17 +33,10 @@ func findAll(dir fs.FS) (paths []string, err error) {
 	return paths, nil
 }
 
-// TestBatchDir holds the path to the test source directory - we build a
-// source from our bravo manifest which all tests can then use
-var TestBatchDir string
-
-// TestBatch lets us read what our test batch actually has
-var TestBatch *batchXML
-
-func assertFileExists(t *testing.T, pth string, expected bool) {
+func assertFileExists(t *testing.T, fs afero.Fs, pth string, expected bool) {
 	t.Helper()
 
-	var _, err = os.Stat(pth)
+	var _, err = fs.Stat(pth)
 	if expected {
 		if os.IsNotExist(err) {
 			t.Errorf("Expected %q to exist", pth)
@@ -56,19 +50,18 @@ func assertFileExists(t *testing.T, pth string, expected bool) {
 	}
 }
 
-// extractBatchFiles creates empty files in the destination based on the
-// source's manifest file. `src` should point to a test batch location where
-// `manifest.txt` and `batch.xml` files live. For each line in the manifest, an
-// empty file will be created in `dst/data`. The XML file is copied to
-// `dst/data/batch.xml`.
-func extractBatchFiles(src, dst string) error {
-	var manifestPath = filepath.Join(src, "manifest.txt")
+// extractBatchFiles creates a batch structure filled with empty files on our
+// in-memory filesystem at `/batch`. `testdir` needs to point to a physical dir
+// containing `manifest.txt` and `batch.xml`. For each line in the manifest, an
+// empty file will be created on the in-memory filesystem.
+func extractBatchFiles(fs afero.Fs, testdir string) error {
+	var manifestPath = filepath.Join(testdir, "manifest.txt")
 	var data, err = os.ReadFile(manifestPath)
 	if err != nil {
 		return err
 	}
 
-	// For each line, create an empty file in dst/data/...
+	// For each manifest line, create an empty file on the memory FS
 	var lines = strings.Split(string(data), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -76,32 +69,38 @@ func extractBatchFiles(src, dst string) error {
 			continue
 		}
 
-		var fname = filepath.Join(dst, "data", line)
+		var fname = filepath.Join("/batch", "data", line)
 		var parent = filepath.Dir(fname)
-		var err = os.MkdirAll(parent, 0755)
+		var err = fs.MkdirAll(parent, 0755)
 		if err != nil {
 			return fmt.Errorf("creating parent dir %q (for file %q): %w", parent, fname, err)
 		}
-		err = os.WriteFile(fname, []byte{}, 0644)
+		err = afero.WriteFile(fs, fname, []byte{}, 0644)
 		if err != nil {
 			return fmt.Errorf("writing empty file %q: %w", fname, err)
 		}
 	}
 
-	var batchXML = filepath.Join(src, "batch.xml")
+	var batchXML = filepath.Join(testdir, "batch.xml")
 	data, err = os.ReadFile(batchXML)
 	if err != nil {
 		return fmt.Errorf("reading %q: %w", batchXML, err)
 	}
 
-	var batchout = filepath.Join(dst, "data", "batch.xml")
-	err = os.WriteFile(batchout, data, 0644)
+	var batchout = filepath.Join("/batch", "data", "batch.xml")
+	err = afero.WriteFile(fs, batchout, data, 0644)
 	if err != nil {
 		return fmt.Errorf("writing %q: %w", batchout, err)
 	}
 
 	return nil
 }
+
+// TestBatch lets us store the test batch XML data for testing
+var TestBatch *batchXML
+
+// TestFS is our read-only filesystem containing the source batch
+var TestFS afero.Fs
 
 // TestMain does our pre-test setup and post-test teardown
 func TestMain(m *testing.M) {
@@ -124,40 +123,31 @@ func TestMain(m *testing.M) {
 		os.Exit(-1)
 	}
 
-	TestBatchDir, err = os.MkdirTemp("", "remove-issues-src-")
+	// Create a writeable FS, extract batch files to it, then wrap it in a
+	// read-only FS so other tests can't accidentally wreck it
+	var writeFS = afero.NewMemMapFs()
+	err = extractBatchFiles(writeFS, basedir)
 	if err != nil {
-		slog.Error("Cannot create temp dir for dummy batch source", "error", err)
+		slog.Error("Error extracting batch files", "basedir", basedir, "error", err.Error())
 		os.Exit(-1)
 	}
-
-	err = extractBatchFiles(basedir, TestBatchDir)
-	if err != nil {
-		slog.Error("Error extracting batch files", "basedir", basedir, "TestBatchDir", TestBatchDir, "error", err.Error())
-		os.RemoveAll(TestBatchDir)
-		os.Exit(-1)
-	}
+	TestFS = afero.NewReadOnlyFs(writeFS)
 
 	var code = m.Run()
-	os.RemoveAll(TestBatchDir)
 	os.Exit(code)
 }
 
-// doRemove sets up a tempdir for the batch copy, then calls run() on the list
-// of keys given, returning the created destination directory and any error
-// from the run command.
+// doRemove runs the remove operation with the given list of issue keys,
+// returning a temp filesystem (layered on top of tfs so we can reuse tfs
+// without re-extracting files) and any errors from the run operation.
 //
-// It is the caller's responsibility to remove the destination directory.
-func doRemove(t *testing.T, keys ...string) (dstdir string, err error) {
-	// run requires the destination not exist, so we only create it to make sure
-	// it's a usable tempdir, then remove it immediately.
-	dstdir, err = os.MkdirTemp("", "remove-issues-dest-")
-	if err != nil {
-		t.Fatalf("Failed to create temp dest dir: %v", err)
-	}
-	os.Remove(dstdir)
+// The corrected batch is written out to "/fixed" on the returned FS.
+func doRemove(keys []string) (afero.Fs, error) {
+	var rwfs = afero.NewCopyOnWriteFs(TestFS, afero.NewMemMapFs())
+	var args = append([]string{"remove-issues (test)", "/batch", "/fixed"}, keys...)
+	var err = run(rwfs, args...)
 
-	var args = append([]string{"remove-issues (test)", TestBatchDir, dstdir}, keys...)
-	return dstdir, run(args...)
+	return rwfs, err
 }
 
 func TestRemoveIssuesCommand(t *testing.T) {
@@ -170,18 +160,18 @@ func TestRemoveIssuesCommand(t *testing.T) {
 	for i, issue := range removeIssues {
 		removeKeys[i] = issue.String() + "_01"
 	}
-	var dstdir, err = doRemove(t, removeKeys...)
-	defer os.RemoveAll(dstdir)
+
+	var fs, err = doRemove(removeKeys)
 	if err != nil {
 		t.Fatalf("Valid call should not have an error, but got %q", err)
 	}
 
 	// Verify batch.xml exists and has the right contents
-	var dstBatchXML = filepath.Join(dstdir, "data", "batch.xml")
-	assertFileExists(t, dstBatchXML, true)
+	var dstBatchXML = filepath.Join("/fixed", "data", "batch.xml")
+	assertFileExists(t, fs, dstBatchXML, true)
 
 	var data []byte
-	data, err = os.ReadFile(dstBatchXML)
+	data, err = afero.ReadFile(fs, dstBatchXML)
 	if err != nil {
 		t.Fatalf("Unable to read %q: %s", dstBatchXML, err)
 	}
@@ -211,11 +201,11 @@ func TestRemoveIssuesCommand(t *testing.T) {
 
 	// Get source and destination file lists so we can compare them
 	var srcList, dstList []string
-	srcList, err = findAll(os.DirFS(TestBatchDir))
+	srcList, err = findAll(fs, "/batch")
 	if err != nil {
 		t.Fatalf("Unable to read test batch dir: %s", err)
 	}
-	dstList, err = findAll(os.DirFS(dstdir))
+	dstList, err = findAll(fs, "/fixed")
 	if err != nil {
 		t.Fatalf("Unable to read fixed batch dir: %s", err)
 	}
@@ -238,8 +228,8 @@ func TestRemoveIssuesCommand(t *testing.T) {
 			removedKey[key] = true
 		}
 		var parts = strings.Split(pth, string(os.PathSeparator))
-		if len(parts) >= 4 {
-			var lccn, dted = parts[1], parts[3]
+		if len(parts) >= 5 {
+			var lccn, dted = parts[2], parts[4]
 			var key = lccn + "/" + dted
 			if removedKey[key] {
 				continue
@@ -251,14 +241,13 @@ func TestRemoveIssuesCommand(t *testing.T) {
 
 	var diff = cmp.Diff(expectedList, dstList)
 	if diff != "" {
+		t.Logf("Source list first 10 elements: %s", strings.Join(srcList[:10], ","))
 		t.Fatalf("Expected lists to match: %s", diff)
 	}
 }
 
 func TestRemoveIssues_InvalidIssueKeys(t *testing.T) {
-	var dstdir, err = doRemove(t, "fakeyfake/1920-01-01_01")
-	defer os.RemoveAll(dstdir)
-
+	var _, err = doRemove([]string{"fakeyfake/1920-01-01_01"})
 	if err == nil {
 		t.Fatalf("Nonexistent issue keys should have failed in run(), but didn't")
 	}
