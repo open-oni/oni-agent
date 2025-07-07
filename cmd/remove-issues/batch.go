@@ -25,6 +25,13 @@ type issueXML struct {
 	Path      string `xml:",innerxml"`
 	Skip      bool   `xml:"-"`
 }
+
+// String gives us a value for testing equality. We ignore edition for
+// simplicity here, so this isn't the same as an NCA issue key.
+func (i *issueXML) String() string {
+	return i.LCCN+"/"+i.IssueDate
+}
+
 type reelXML struct {
 	ReelNum string `xml:"reelNumber,attr"`
 	Path    string `xml:",innerxml"`
