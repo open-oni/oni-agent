@@ -19,7 +19,6 @@ type BatchXML struct {
 	AwardYear string      `xml:"awardYear,attr"`
 	Issues    []*IssueXML `xml:"issue"`
 	Reels     []*reelXML  `xml:"reel"`
-	SkipDirs  []string    `xml:"-"`
 }
 
 // IssueXML holds the deserialized data from an ONI batch.xml for the
@@ -44,9 +43,9 @@ type reelXML struct {
 	Path    string `xml:",innerxml"`
 }
 
-// ParseBatch reads the given XML file and processes it into batch data.  The
-// skipKeys are converted into directories that should be skipped from the
-// copy, and stored in the returned structure's SkipDirs field.
+// ParseBatch reads the given XML file and processes it into batch data.
+// skipKeys allows the parser to mark issues as skippable when writing out the
+// corrected batch.xml file.
 func ParseBatch(fs afero.Fs, pth string, skipKeys []string) (*BatchXML, error) {
 	var data, err = afero.ReadFile(fs, pth)
 	if err != nil {
@@ -74,21 +73,9 @@ func ParseBatch(fs afero.Fs, pth string, skipKeys []string) (*BatchXML, error) {
 			return nil, fmt.Errorf("issuekey %q not in batch", key)
 		}
 
-		var dir, _ = filepath.Split(issue.Path)
 		issue.Skip = true
-		b.SkipDirs = append(b.SkipDirs, dir)
 	}
 
-	var newIssues []*IssueXML
-	for _, i := range b.Issues {
-		if i.Skip {
-			continue
-		}
-
-		newIssues = append(newIssues, i)
-	}
-
-	b.Issues = newIssues
 	return b, nil
 }
 
@@ -121,9 +108,9 @@ func makeattr(name, val string) xml.Attr {
 }
 
 // MarshalXML sets up a wrapper element that defines the <ndnp:batch> tag very
-// precisely.
+// precisely while also ensuring skipped issues aren't marshaled.
 //
-// This stupid hack seems to be necessary to get Go's XML encoding to output
+// The namespace hack seems to be necessary to get Go's XML encoding to output
 // the namespaces we want so the batch XML opening tag looks basically the same
 // as it did prior to the rewrite
 func (b *BatchXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
@@ -131,8 +118,13 @@ func (b *BatchXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		Issues []*IssueXML `xml:"issue"`
 		Reels  []*reelXML  `xml:"reel"`
 	}{
-		Issues: b.Issues,
 		Reels:  b.Reels,
+	}
+	for _, i := range b.Issues {
+		if i.Skip {
+			continue
+		}
+		wrapper.Issues = append(wrapper.Issues, i)
 	}
 
 	start.Name.Local = "ndnp:batch"

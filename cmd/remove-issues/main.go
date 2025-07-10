@@ -119,7 +119,16 @@ func run(fs afero.Fs, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("writing batch: %w", err)
 	}
-	conf.SkipDirs = batch.SkipDirs
+
+	// Gather dropped issues to figure out the dirs we'll skip
+	var dirs []string
+	for _, i := range batch.Issues {
+		if i.Skip {
+			var dir, _ = filepath.Split(i.Path)
+			dirs = append(dirs, dir)
+		}
+	}
+	conf.SkipDirs = dirs
 
 	var walker = NewWalker(conf)
 	err = walker.Walk()
