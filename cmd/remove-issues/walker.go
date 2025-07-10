@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/open-oni/oni-agent/internal/file"
 	"github.com/spf13/afero"
 )
 
@@ -88,7 +89,7 @@ func (w *Walker) walkFunc(path string, info os.FileInfo, err error) error {
 	}
 
 	log.Printf("INFO: copying file %q to %q", path, destFile)
-	err = copyWithRetry(w.conf.FS, path, destFile, 5)
+	err = file.Copy(w.conf.FS, path, destFile, 5)
 	if err != nil {
 		return fmt.Errorf("copying %q to %q: %w", path, destFile, err)
 	}
