@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/open-oni/oni-agent/internal/batchfix"
 	"github.com/spf13/afero"
 )
 
@@ -107,8 +108,8 @@ func run(fs afero.Fs, args ...string) error {
 	var newBatchPath = filepath.Join(conf.DestDir, "data", "batch.xml")
 
 	log.Printf("INFO: Reading source batch XML %q", batchPath)
-	var batch *batchXML
-	batch, err = ParseBatch(conf.FS, batchPath, conf.IssueKeys)
+	var batch *batchfix.BatchXML
+	batch, err = batchfix.ParseBatch(conf.FS, batchPath, conf.IssueKeys)
 	if err != nil {
 		return fmt.Errorf("parsing batch: %w", err)
 	}

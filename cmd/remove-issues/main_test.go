@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-oni/oni-agent/internal/batchfix"
 	"github.com/spf13/afero"
 )
 
@@ -97,7 +98,7 @@ func extractBatchFiles(fs afero.Fs, testdir string) error {
 }
 
 // TestBatch lets us store the test batch XML data for testing
-var TestBatch *batchXML
+var TestBatch *batchfix.BatchXML
 
 // TestFS is our read-only filesystem containing the source batch
 var TestFS afero.Fs
@@ -151,7 +152,7 @@ func doRemove(keys []string) (afero.Fs, error) {
 }
 
 func TestRemoveIssuesCommand(t *testing.T) {
-	var removeIssues = []*issueXML{
+	var removeIssues = []*batchfix.IssueXML{
 		{LCCN: "sn84022658", IssueDate: "1856-01-05"},
 		{LCCN: "sn84022658", IssueDate: "1856-11-29"},
 		{LCCN: "sn98068707", IssueDate: "1855-10-03"},
@@ -176,7 +177,7 @@ func TestRemoveIssuesCommand(t *testing.T) {
 		t.Fatalf("Unable to read %q: %s", dstBatchXML, err)
 	}
 
-	var fixedBatch batchXML
+	var fixedBatch batchfix.BatchXML
 	err = xml.Unmarshal(data, &fixedBatch)
 	if err != nil {
 		t.Fatalf("Error unmarshaling %q: %s", dstBatchXML, err)
