@@ -130,10 +130,10 @@ func run(fs afero.Fs, args ...string) error {
 	}
 	conf.SkipDirs = dirs
 
-	var walker = NewWalker(conf)
-	err = walker.Walk()
+	var fixer = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir, conf.SkipDirs)
+	err = fixer.Fix()
 	if err != nil {
-		return fmt.Errorf("walking batch files: %w", err)
+		return err
 	}
 
 	return nil
