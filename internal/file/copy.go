@@ -59,11 +59,13 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 // "real" problem that a retry won't help.
 func Copy(fs afero.Fs, src, dest string, maxRetry int) (err error) {
 	for n := 0; n < maxRetry; n++ {
+		if n > 0 {
+			time.Sleep(time.Second)
+		}
 		err = doCopy(fs, src, dest)
 		if err == nil {
 			return err
 		}
-		time.Sleep(time.Second)
 	}
 
 	return err
