@@ -24,6 +24,7 @@ type Fixer struct {
 	src      string
 	dst      string
 	skipDirs []string
+	batch    *BatchXML
 }
 
 // NewFixer returns a new Fixer instance that will copy (and fix) files on the
@@ -32,22 +33,58 @@ type Fixer struct {
 // TODO: we need a [context.Context] passed in so this can be interrupted. TODO
 // 2: need to have a post-failure cleanup somehow. Maybe that's the caller's
 // responsibility?
-func NewFixer(filesystem afero.Fs, source, destination string, skipDirs []string) *Fixer {
+func NewFixer(filesystem afero.Fs, source, destination string) *Fixer {
 	return &Fixer{
-		fs:       filesystem,
-		src:      source,
-		dst:      destination,
-		skipDirs: skipDirs,
+		fs:  filesystem,
+		src: source,
+		dst: destination,
 	}
 }
 
-// Fix starts the file system traversal and copies all files except batch.xml
-// (which needs to be rewritten outside the file copy), validated XMLs (the
-// various *_1.xml files), TIFFs, and anything matching the Fixer's skip dirs.
-func (f *Fixer) Fix() error {
+func (f *Fixer) readSourceBatch(skipKeys []string) error {
+	var err error
+	var srcBatchPath = filepath.Join(f.src, "data", "batch.xml")
+	f.batch, err = ParseBatch(f.fs, srcBatchPath, skipKeys)
+	if err != nil {
+		return fmt.Errorf("parsing source batch: %w", err)
+	}
+
+	// Gather dropped issues to figure out the dirs we'll skip
+	for _, i := range f.batch.Issues {
+		if i.Skip {
+			var dir, _ = filepath.Split(i.Path)
+			f.skipDirs = append(f.skipDirs, dir)
+		}
+	}
+
+	return nil
+}
+
+// RemoveIssues starts the file system traversal, copying all files except the
+// source batch.xml (it's modified on write to remove the given issue keys),
+// validated XMLs (the various *_1.xml files), TIFFs, and anything in a skipped
+// issue's location.
+func (f *Fixer) RemoveIssues(keys []string) error {
+	// Read the source batch file to set up our skip dirs
+	var err = f.readSourceBatch(keys)
+	if err != nil {
+		return err
+	}
+
 	// We use a base-path FS for the walk so we don't have to strip off the path
 	// for building source/dest mappings
-	return afero.Walk(afero.NewBasePathFs(f.fs, f.src), "/", f.walkFunc)
+	err = afero.Walk(afero.NewBasePathFs(f.fs, f.src), "/", f.walkFunc)
+	if err != nil {
+		return err
+	}
+
+	var dstBatchPath = filepath.Join(f.dst, "data", "batch.xml")
+	err = f.batch.WriteBatchXML(f.fs, dstBatchPath)
+	if err != nil {
+		return fmt.Errorf("writing destination batch: %w", err)
+	}
+
+	return nil
 }
 
 func (f *Fixer) walkFunc(pth string, info os.FileInfo, err error) error {

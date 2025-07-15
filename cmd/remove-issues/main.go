@@ -36,7 +36,6 @@ type config struct {
 	SourceDir string
 	DestDir   string
 	IssueKeys []string
-	SkipDirs  []string
 	FS        afero.Fs
 }
 
@@ -103,35 +102,8 @@ func run(fs afero.Fs, args ...string) error {
 		return fmt.Errorf("getting options from args: %w", err)
 	}
 
-	// Read the batch XML to get a list of issue directories to skip
-	var batchPath = filepath.Join(conf.SourceDir, "data", "batch.xml")
-	var newBatchPath = filepath.Join(conf.DestDir, "data", "batch.xml")
-
-	log.Printf("INFO: Reading source batch XML %q", batchPath)
-	var batch *batchfix.BatchXML
-	batch, err = batchfix.ParseBatch(conf.FS, batchPath, conf.IssueKeys)
-	if err != nil {
-		return fmt.Errorf("parsing batch: %w", err)
-	}
-
-	log.Printf("INFO: Writing new batch XML to %q", newBatchPath)
-	err = batch.WriteBatchXML(conf.FS, newBatchPath)
-	if err != nil {
-		return fmt.Errorf("writing batch: %w", err)
-	}
-
-	// Gather dropped issues to figure out the dirs we'll skip
-	var dirs []string
-	for _, i := range batch.Issues {
-		if i.Skip {
-			var dir, _ = filepath.Split(i.Path)
-			dirs = append(dirs, dir)
-		}
-	}
-	conf.SkipDirs = dirs
-
-	var fixer = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir, conf.SkipDirs)
-	err = fixer.Fix()
+	var fixer = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir)
+	err = fixer.RemoveIssues(conf.IssueKeys)
 	if err != nil {
 		return err
 	}
