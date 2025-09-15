@@ -106,13 +106,73 @@ func findAll(fs afero.Fs, dir string) (paths []string, err error) {
 	return paths, nil
 }
 
-func TestFixer_readSourceBatch(t *testing.T) {
-	var fs = afero.NewMemMapFs()
-	var err = createTestBatch(fs, testSrcDir)
-	if err != nil {
-		t.Fatalf("Failed to create test batch: %v", err)
+func TestNewFixer(t *testing.T) {
+	var tests = map[string]struct {
+		src     string
+		dst     string
+		setup   func(fs afero.Fs, src, dst string) error
+		wantErr bool
+	}{
+		"Valid": {
+			src: testSrcDir,
+			dst: testDstDir,
+			setup: func(fs afero.Fs, src, dst string) error {
+				return fs.MkdirAll(src, 0755)
+			},
+			wantErr: false,
+		},
+		"Source does not exist": {
+			src:     "/nonexistent",
+			dst:     testDstDir,
+			wantErr: true,
+		},
+		"Source is a file": {
+			src: testSrcDir,
+			dst: testDstDir,
+			setup: func(fs afero.Fs, src, dst string) error {
+				_, err := fs.Create(src)
+				return err
+			},
+			wantErr: true,
+		},
+		"Destination exists": {
+			src: testSrcDir,
+			dst: testDstDir,
+			setup: func(fs afero.Fs, src, dst string) error {
+				if err := fs.MkdirAll(src, 0755); err != nil {
+					return err
+				}
+				// Doesn't matter if it's a file or a dir, just that it exists
+				_, err := fs.Create(dst)
+				return err
+			},
+			wantErr: true,
+		},
 	}
 
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			var fs = afero.NewMemMapFs()
+			if tt.setup != nil {
+				var err = tt.setup(fs, tt.src, tt.dst)
+				if err != nil {
+					t.Fatalf("setup failed: %s", err)
+				}
+			}
+
+			fixer, err := NewFixer(fs, tt.src, tt.dst)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewFixer() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr && fixer == nil {
+				t.Errorf("Expected a non-nil fixer on success")
+			}
+		})
+	}
+}
+
+func TestFixer_readSourceBatch(t *testing.T) {
 	var tests = map[string]struct {
 		skipKeys         []string
 		wantErr          bool
@@ -142,8 +202,16 @@ func TestFixer_readSourceBatch(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			var fixer = NewFixer(fs, testSrcDir, testDstDir)
-			var err = fixer.readSourceBatch(tt.skipKeys)
+			var fs = afero.NewMemMapFs()
+			err := createTestBatch(fs, testSrcDir)
+			if err != nil {
+				t.Fatalf("Failed to create test batch: %v", err)
+			}
+			fixer, err := NewFixer(fs, testSrcDir, testDstDir)
+			if err != nil {
+				t.Fatalf("Error calling NewFixer: %s", err)
+			}
+			err = fixer.readSourceBatch(tt.skipKeys)
 
 			// Verify error state. If we expect an error, we also don't test further.
 			if tt.wantErr {
@@ -274,7 +342,10 @@ func TestFixer_RemoveIssues(t *testing.T) {
 				t.Fatalf("Failed to create test batch: %s", err)
 			}
 
-			var fixer = NewFixer(fs, testSrcDir, testDstDir)
+			fixer, err := NewFixer(fs, testSrcDir, testDstDir)
+			if err != nil {
+				t.Fatalf("Error calling NewFixer: %s", err)
+			}
 			err = fixer.RemoveIssues(tt.skipKeys)
 
 			var dstFiles []string

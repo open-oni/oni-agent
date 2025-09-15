@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/open-oni/oni-agent/internal/batchfix"
 	"github.com/spf13/afero"
@@ -56,41 +55,15 @@ func getArgs(fs afero.Fs, args []string) (*config, error) {
 	}
 	appName = args[0]
 	if len(args) < 4 {
-		return nil, newUsageError("missing one or more arguments")
+		return nil, fmt.Errorf("missing one or more arguments")
 	}
 
-	var src = args[1]
-	var dst = args[2]
 	var conf = &config{
-		SourceDir: src,
-		DestDir:   dst,
+		SourceDir: args[1],
+		DestDir:   args[2],
 		IssueKeys: args[3:],
 		FS:        fs,
 	}
-	var err error
-	conf.SourceDir, err = filepath.Abs(conf.SourceDir)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path: %w", err)
-	}
-	conf.DestDir, err = filepath.Abs(conf.DestDir)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path: %w", err)
-	}
-
-	var info os.FileInfo
-	info, err = conf.FS.Stat(conf.SourceDir)
-	if err != nil {
-		return nil, newUsageError("invalid source (%q): %s", conf.SourceDir, err)
-	}
-	if !info.IsDir() {
-		return nil, newUsageError("invalid source (%q): not a directory", conf.SourceDir)
-	}
-
-	_, err = conf.FS.Stat(conf.DestDir)
-	if err == nil || !os.IsNotExist(err) {
-		return nil, newUsageError("invalid destination (%q): already exists", conf.DestDir)
-	}
-
 	return conf, nil
 }
 
@@ -99,11 +72,15 @@ func getArgs(fs afero.Fs, args []string) (*config, error) {
 func run(fs afero.Fs, args ...string) error {
 	var conf, err = getArgs(fs, args)
 	if err != nil {
-		return fmt.Errorf("getting options from args: %w", err)
+		printUsage(err.Error())
+		os.Exit(1)
 	}
 
-	var fixer = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir)
-	err = fixer.RemoveIssues(conf.IssueKeys)
+	var fixer *batchfix.Fixer
+	fixer, err = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir)
+	if err == nil {
+		err = fixer.RemoveIssues(conf.IssueKeys)
+	}
 	if err != nil {
 		return err
 	}
@@ -114,7 +91,6 @@ func run(fs afero.Fs, args ...string) error {
 func main() {
 	var err = run(afero.NewOsFs(), os.Args...)
 	if err != nil {
-		printUsage(err.Error())
 		os.Exit(1)
 	}
 

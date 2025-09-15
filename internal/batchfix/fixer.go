@@ -33,12 +33,36 @@ type Fixer struct {
 // TODO: we need a [context.Context] passed in so this can be interrupted. TODO
 // 2: need to have a post-failure cleanup somehow. Maybe that's the caller's
 // responsibility?
-func NewFixer(filesystem afero.Fs, source, destination string) *Fixer {
-	return &Fixer{
+func NewFixer(filesystem afero.Fs, source, destination string) (f *Fixer, err error) {
+	f = &Fixer{
 		fs:  filesystem,
 		src: source,
 		dst: destination,
 	}
+	f.src, err = filepath.Abs(source)
+	if err != nil {
+		return nil, fmt.Errorf("getting absolute path from source %q: %w", source, err)
+	}
+	destination, err = filepath.Abs(destination)
+	if err != nil {
+		return nil, fmt.Errorf("getting absolute path: %w", err)
+	}
+
+	var info os.FileInfo
+	info, err = filesystem.Stat(source)
+	if err != nil {
+		return nil, fmt.Errorf("invalid source (%q): %s", source, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("invalid source (%q): not a directory", source)
+	}
+
+	_, err = filesystem.Stat(destination)
+	if err == nil || !os.IsNotExist(err) {
+		return nil, fmt.Errorf("invalid destination (%q): already exists", destination)
+	}
+
+	return f, nil
 }
 
 func (f *Fixer) readSourceBatch(skipKeys []string) error {
