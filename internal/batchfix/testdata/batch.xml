@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ndnp:batch xmlns:ndnp="http://www.loc.gov/ndnp" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/ndnp" name="batch_portlandgeneralelectric_20191118OakUnicornTramplingRoses_ver01" awardee="portlandgeneralelectric" awardYear="2019">
+  <issue lccn="sn96088134" issueDate="1929-05-31" editionOrder="01">sn96088134/print/1929053101/1929053101.xml</issue>
+  <issue lccn="sn96088135" issueDate="1958-02-21" editionOrder="01">sn96088135/print/1958022101/1958022101.xml</issue>
+</ndnp:batch>

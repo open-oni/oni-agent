@@ -1,24 +1,30 @@
-package main
+package batchfix
 
 import (
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/afero"
 )
 
-type batchXML struct {
+// BatchXML holds the deserialized data from an ONI batch.xml file as well as
+// correction-specific features like which directories will be skipped (based
+// on passed in issue keys)
+type BatchXML struct {
 	XMLName   string      `xml:"http://www.loc.gov/ndnp batch"`
 	Name      string      `xml:"name,attr"`
 	Awardee   string      `xml:"awardee,attr"`
 	AwardYear string      `xml:"awardYear,attr"`
-	Issues    []*issueXML `xml:"issue"`
+	Issues    []*IssueXML `xml:"issue"`
 	Reels     []*reelXML  `xml:"reel"`
-	SkipDirs  []string    `xml:"-"`
 }
-type issueXML struct {
+
+// IssueXML holds the deserialized data from an ONI batch.xml for the
+// individual issues as well as a flag for whether or not an issue is being
+// removed in the corrected output.
+type IssueXML struct {
 	LCCN      string `xml:"lccn,attr"`
 	IssueDate string `xml:"issueDate,attr"`
 	Edition   string `xml:"editionOrder,attr"`
@@ -28,7 +34,7 @@ type issueXML struct {
 
 // String gives us a value for testing equality. We ignore edition for
 // simplicity here, so this isn't the same as an NCA issue key.
-func (i *issueXML) String() string {
+func (i *IssueXML) String() string {
 	return i.LCCN+"/"+i.IssueDate
 }
 
@@ -37,15 +43,15 @@ type reelXML struct {
 	Path    string `xml:",innerxml"`
 }
 
-// ParseBatch reads the given XML file and processes it into batch data.  The
-// skipKeys are converted into directories that should be skipped from the
-// copy, and stored in the returned structure's SkipDirs field.
-func ParseBatch(pth string, skipKeys []string) (*batchXML, error) {
-	var data, err = ioutil.ReadFile(pth)
+// ParseBatch reads the given XML file and processes it into batch data.
+// skipKeys allows the parser to mark issues as skippable when writing out the
+// corrected batch.xml file.
+func ParseBatch(fs afero.Fs, pth string, skipKeys []string) (*BatchXML, error) {
+	var data, err = afero.ReadFile(fs, pth)
 	if err != nil {
 		return nil, err
 	}
-	var b = new(batchXML)
+	var b = new(BatchXML)
 	err = xml.Unmarshal(data, b)
 	if err != nil {
 		return nil, err
@@ -54,7 +60,7 @@ func ParseBatch(pth string, skipKeys []string) (*batchXML, error) {
 		return nil, fmt.Errorf("parsed data has no issues")
 	}
 
-	var keyToDir = make(map[string]*issueXML)
+	var keyToDir = make(map[string]*IssueXML)
 	for _, issue := range b.Issues {
 		var key = keyfix(issue.LCCN + "/" + issue.IssueDate + issue.Edition)
 		keyToDir[key] = issue
@@ -67,27 +73,15 @@ func ParseBatch(pth string, skipKeys []string) (*batchXML, error) {
 			return nil, fmt.Errorf("issuekey %q not in batch", key)
 		}
 
-		var dir, _ = filepath.Split(issue.Path)
 		issue.Skip = true
-		b.SkipDirs = append(b.SkipDirs, dir)
 	}
 
-	var newIssues []*issueXML
-	for _, i := range b.Issues {
-		if i.Skip {
-			continue
-		}
-
-		newIssues = append(newIssues, i)
-	}
-
-	b.Issues = newIssues
 	return b, nil
 }
 
-func (b *batchXML) WriteBatchXML(pth string) error {
+func (b *BatchXML) WriteBatchXML(fs afero.Fs, pth string) error {
 	var dir, _ = filepath.Split(pth)
-	var err = os.MkdirAll(dir, 0755)
+	var err = fs.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
 	}
@@ -100,7 +94,7 @@ func (b *batchXML) WriteBatchXML(pth string) error {
 
 	var output = append([]byte(xml.Header), data...)
 
-	return ioutil.WriteFile(pth, output, 0644)
+	return afero.WriteFile(fs, pth, output, 0644)
 }
 
 func keyfix(key string) string {
@@ -114,18 +108,23 @@ func makeattr(name, val string) xml.Attr {
 }
 
 // MarshalXML sets up a wrapper element that defines the <ndnp:batch> tag very
-// precisely.
+// precisely while also ensuring skipped issues aren't marshaled.
 //
-// This stupid hack seems to be necessary to get Go's XML encoding to output
+// The namespace hack seems to be necessary to get Go's XML encoding to output
 // the namespaces we want so the batch XML opening tag looks basically the same
 // as it did prior to the rewrite
-func (b *batchXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+func (b *BatchXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	var wrapper = struct {
-		Issues []*issueXML `xml:"issue"`
+		Issues []*IssueXML `xml:"issue"`
 		Reels  []*reelXML  `xml:"reel"`
 	}{
-		Issues: b.Issues,
 		Reels:  b.Reels,
+	}
+	for _, i := range b.Issues {
+		if i.Skip {
+			continue
+		}
+		wrapper.Issues = append(wrapper.Issues, i)
 	}
 
 	start.Name.Local = "ndnp:batch"

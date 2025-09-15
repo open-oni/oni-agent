@@ -4,15 +4,16 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"runtime"
+
+	"github.com/open-oni/oni-agent/internal/batchfix"
+	"github.com/spf13/afero"
 )
 
 var appName string
 
 func printUsage(msg string, args ...interface{}) {
 	var fmsg = fmt.Sprintf(msg, args...)
-	fmt.Printf("\033[31;1mERROR: %s\033[0m\n", fmsg)
+	fmt.Printf("\033[91;1mERROR:\033[97m %s\033[m\n", fmsg)
 	fmt.Printf(`
 Usage: %s <source directory> <destination directory> <issue key>...
 
@@ -34,7 +35,7 @@ type config struct {
 	SourceDir string
 	DestDir   string
 	IssueKeys []string
-	SkipDirs  []string
+	FS        afero.Fs
 }
 
 type usageError string
@@ -48,97 +49,50 @@ func (u usageError) Error() string {
 }
 
 // getArgs does some sanity-checking and sets the source/dest args
-func getArgs(args []string) (*config, error) {
+func getArgs(fs afero.Fs, args []string) (*config, error) {
 	if len(args) < 1 {
 		panic("missing args[0]!")
 	}
 	appName = args[0]
 	if len(args) < 4 {
-		return nil, newUsageError("missing one or more arguments")
+		return nil, fmt.Errorf("missing one or more arguments")
 	}
 
-	var src = args[1]
-	var dst = args[2]
 	var conf = &config{
-		SourceDir: src,
-		DestDir:   dst,
+		SourceDir: args[1],
+		DestDir:   args[2],
 		IssueKeys: args[3:],
+		FS:        fs,
 	}
-	var err error
-	conf.SourceDir, err = filepath.Abs(conf.SourceDir)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path: %w", err)
-	}
-	conf.DestDir, err = filepath.Abs(conf.DestDir)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path: %w", err)
-	}
-
-	var info os.FileInfo
-	info, err = os.Stat(conf.SourceDir)
-	if err != nil {
-		return nil, newUsageError("invalid source (%q): %s", conf.SourceDir, err)
-	}
-	if !info.IsDir() {
-		return nil, newUsageError("invalid source (%q): not a directory", conf.SourceDir)
-	}
-
-	_, err = os.Stat(conf.DestDir)
-	if err == nil || !os.IsNotExist(err) {
-		return nil, newUsageError("invalid destination (%q): already exists", conf.DestDir)
-	}
-
 	return conf, nil
 }
 
 // run contains the main logic of the application, allowing it to be called
 // from tests without exiting the program
-func run(args ...string) error {
-	var conf, err = getArgs(args)
+func run(fs afero.Fs, args ...string) error {
+	var conf, err = getArgs(fs, args)
 	if err != nil {
-		return fmt.Errorf("getting options from args: %w", err)
+		printUsage(err.Error())
+		os.Exit(1)
 	}
 
-	// Read the batch XML to get a list of issue directories to skip
-	var batchPath = filepath.Join(conf.SourceDir, "data", "batch.xml")
-	var newBatchPath = filepath.Join(conf.DestDir, "data", "batch.xml")
-
-	log.Printf("INFO: Reading source batch XML %q", batchPath)
-	var batch *batchXML
-	batch, err = ParseBatch(batchPath, conf.IssueKeys)
+	var fixer *batchfix.Fixer
+	fixer, err = batchfix.NewFixer(conf.FS, conf.SourceDir, conf.DestDir)
+	if err == nil {
+		err = fixer.RemoveIssues(conf.IssueKeys)
+	}
 	if err != nil {
-		return fmt.Errorf("parsing batch: %w", err)
+		return err
 	}
 
-	log.Printf("INFO: Writing new batch XML to %q", newBatchPath)
-	err = batch.WriteBatchXML(newBatchPath)
-	if err != nil {
-		return fmt.Errorf("writing batch: %w", err)
-	}
-	conf.SkipDirs = batch.SkipDirs
-
-	// Crawl all files and determine the action necessary.  NOTE: this may not be
-	// the ideal number of workers.  On an SSD, it seems to work much faster than
-	// lower numbers.  One of the following must be true, but I dunno which:
-	// - Go's IO is really bad when not parallelized
-	// - My code is doing more CPU-intense logic than it seems like it should
-	// - SSD write queuing is just super amazing
-	var queue = NewWorkQueue(conf, 2*runtime.NumCPU())
-	var walker = NewWalker(conf, queue)
-	err = walker.Walk()
-	if err != nil {
-		return fmt.Errorf("walking batch files: %w", err)
-	}
-
-	// Wait for the queue to complete all actions/jobs
-	queue.Wait()
 	return nil
 }
 
 func main() {
-	var err = run(os.Args...)
+	var err = run(afero.NewOsFs(), os.Args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s", err)
 		os.Exit(1)
 	}
+
+	log.Printf("INFO: All files processed.")
 }
