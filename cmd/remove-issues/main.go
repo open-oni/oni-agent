@@ -14,7 +14,7 @@ var appName string
 
 func printUsage(msg string, args ...interface{}) {
 	var fmsg = fmt.Sprintf(msg, args...)
-	fmt.Printf("\033[31;1mERROR: %s\033[0m\n", fmsg)
+	fmt.Printf("\033[91;1mERROR:\033[97m %s\033[m\n", fmsg)
 	fmt.Printf(`
 Usage: %s <source directory> <destination directory> <issue key>...
 
@@ -114,7 +114,7 @@ func run(fs afero.Fs, args ...string) error {
 func main() {
 	var err = run(afero.NewOsFs(), os.Args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s", err)
+		printUsage(err.Error())
 		os.Exit(1)
 	}
 
