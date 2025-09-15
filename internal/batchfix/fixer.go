@@ -23,6 +23,7 @@ type Fixer struct {
 	fs       afero.Fs
 	src      string
 	dst      string
+	tmpDst   string
 	skipDirs []string
 	batch    *BatchXML
 }
@@ -44,6 +45,9 @@ func NewFixer(filesystem afero.Fs, source, destination string) (f *Fixer, err er
 		return nil, fmt.Errorf("getting absolute path from destination %q: %w", destination, err)
 	}
 
+	var dir, base = filepath.Split(f.dst)
+	f.tmpDst = filepath.Join(dir, "WIP-UNREADY-"+base)
+
 	var info os.FileInfo
 	info, err = filesystem.Stat(f.src)
 	if err != nil {
@@ -56,6 +60,11 @@ func NewFixer(filesystem afero.Fs, source, destination string) (f *Fixer, err er
 	_, err = filesystem.Stat(f.dst)
 	if err == nil || !os.IsNotExist(err) {
 		return nil, fmt.Errorf("invalid destination (%q): already exists", f.dst)
+	}
+
+	_, err = filesystem.Stat(f.tmpDst)
+	if err == nil || !os.IsNotExist(err) {
+		return nil, fmt.Errorf("temporary destination (%q) already exists", f.tmpDst)
 	}
 
 	return f, nil
@@ -95,13 +104,21 @@ func (f *Fixer) RemoveIssues(keys []string) error {
 	// for building source/dest mappings
 	err = afero.Walk(afero.NewBasePathFs(f.fs, f.src), "/", f.walkFunc)
 	if err != nil {
+		_ = f.fs.RemoveAll(f.tmpDst)
 		return err
 	}
 
-	var dstBatchPath = filepath.Join(f.dst, "data", "batch.xml")
+	var dstBatchPath = filepath.Join(f.tmpDst, "data", "batch.xml")
 	err = f.batch.WriteBatchXML(f.fs, dstBatchPath)
 	if err != nil {
+		_ = f.fs.RemoveAll(f.tmpDst)
 		return fmt.Errorf("writing destination batch: %w", err)
+	}
+
+	err = f.fs.Rename(f.tmpDst, f.dst)
+	if err != nil {
+		_ = f.fs.RemoveAll(f.tmpDst)
+		return fmt.Errorf("moving temporary directory %q to %q: %w", f.tmpDst, f.dst, err)
 	}
 
 	return nil
@@ -149,13 +166,13 @@ func (f *Fixer) walkFunc(pth string, info os.FileInfo, err error) error {
 	}
 
 	// Create the destination directory if it doesn't exist
-	err = f.fs.MkdirAll(filepath.Join(f.dst, dir), 0755)
+	err = f.fs.MkdirAll(filepath.Join(f.tmpDst, dir), 0755)
 	if err != nil {
 		return fmt.Errorf("creating dir %q in destination filesystem: %w", dir, err)
 	}
 
 	var src = filepath.Join(f.src, pth)
-	var dst = filepath.Join(f.dst, pth)
+	var dst = filepath.Join(f.tmpDst, pth)
 	err = file.Copy(f.fs, src, dst, 5)
 	if err != nil {
 		return err
