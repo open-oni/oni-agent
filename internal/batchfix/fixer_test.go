@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
+
+	"github.com/open-oni/oni-agent/internal/file"
 )
 
 const (
@@ -277,6 +280,13 @@ func (fs *midWriteFailFs) Create(name string) (afero.File, error) {
 }
 
 func TestFixer_RemoveIssues(t *testing.T) {
+	// Make the file copy failures faster for testing. This is fast enough that
+	// tests are acceptable, but slow enough that we're still testing the retry
+	// as a side effect of the failure-mid-copy test below.
+	var origDelay = file.CopyRetryDelay
+	file.CopyRetryDelay = time.Millisecond*100
+	defer func() { file.CopyRetryDelay = origDelay }()
+
 	var tests = map[string]struct {
 		skipKeys            []string
 		wantErr             bool
@@ -355,11 +365,6 @@ func TestFixer_RemoveIssues(t *testing.T) {
 			expectedDstFiles:    []string{},
 			expectedBatchIssues: 0,
 		},
-		// Note: this test will take several seconds to run because of our
-		// retry-on-fail file copying logic. I don't want to hack up tests like
-		// crazy to try and avoid that delay, as it's not awful and adds a small
-		// check that the retry is doing what we want anyway, even though that
-		// logic isn't what we're trying to test here.
 		"Error during file copy": {
 			skipKeys:            []string{},
 			wantErr:             true,
