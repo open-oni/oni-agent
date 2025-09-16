@@ -4,18 +4,24 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"iter"
 	"slices"
 	"strings"
 )
 
-const opRemove = "remove"
+// Operation is a string that represents a single type of change in a batch
+// patch, such as removing an issue
+type Operation string
 
-var validOps = []string{opRemove}
+// OpRemoveIssue requests an issue be removed from the new batch
+const OpRemoveIssue Operation = "RemoveIssue"
+
+var validOps = []Operation{OpRemoveIssue}
 
 // An instruction is a single operation to perform on a batch, such as removing
 // a single issue
 type instruction struct {
-	operation string
+	operation Operation
 	operand   string
 }
 
@@ -50,7 +56,7 @@ func FromStream(r io.Reader) (*BatchPatch, error) {
 			return nil, fmt.Errorf("malformed instruction on line %d (%q)", lineNum, line)
 		}
 
-		var operation, operand = parts[0], parts[1]
+		var operation, operand = Operation(parts[0]), parts[1]
 		if !slices.Contains(validOps, operation) {
 			return nil, fmt.Errorf("invalid operation %q on line %d (%q)", operation, lineNum, line)
 		}
@@ -69,4 +75,17 @@ func FromStream(r io.Reader) (*BatchPatch, error) {
 // BatchName returns the name of the batch to which this BatchPatch will apply
 func (bp *BatchPatch) BatchName() string {
 	return bp.batchName
+}
+
+// Instructions yields one operation/operand pair per iteration. Operation is
+// what a patch instruction does (e.g., "remove") while operand is what it
+// affects (e.g., an issue key).
+func (bp *BatchPatch) Instructions() iter.Seq2[Operation, string] {
+	return func(yield func(operation Operation, operand string) bool) {
+		for _, i := range bp.instructions {
+			if !yield(i.operation, i.operand) {
+				return
+			}
+		}
+	}
 }
