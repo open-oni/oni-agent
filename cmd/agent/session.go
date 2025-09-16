@@ -15,6 +15,7 @@ import (
 	"github.com/open-oni/oni-agent/internal/batchpatch"
 	"github.com/open-oni/oni-agent/internal/queue"
 	"github.com/open-oni/oni-agent/internal/version"
+	"github.com/spf13/afero"
 	"github.com/uoregon-libraries/gopkg/xmlnode"
 )
 
@@ -129,6 +130,8 @@ func (s session) handle() {
 		s.purgeBatch(args[0])
 
 	case "batch-patch":
+		// TODO: get batch name (and new version name) from caller so there isn't
+		// weird batchpatch logic for batch name, guesswork for rename, etc.
 		s.batchPatch()
 
 	case "ensure-awardee":
@@ -272,7 +275,12 @@ func (s session) batchPatch() {
 		return
 	}
 
-	// TODO: Data is good, batch exists. Create and queue up the job!
+	var src = bp.BatchName()
+	var dest = src + "_fixed"
+	var j = JobRunner.NewBatchPatchJob(afero.NewBasePathFs(afero.NewOsFs(), BatchSource), src, dest, bp)
+	JobRunner.Push(j)
+
+	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
 }
 
 func (s session) getJob(arg string) (job *queue.Job, found bool) {
