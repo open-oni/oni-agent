@@ -116,7 +116,7 @@ func TestNewFixer(t *testing.T) {
 		"Valid": {
 			src: testSrcDir,
 			dst: testDstDir,
-			setup: func(fs afero.Fs, src, dst string) error {
+			setup: func(fs afero.Fs, src, _ string) error {
 				return fs.MkdirAll(src, 0755)
 			},
 			wantErr: false,
@@ -129,7 +129,7 @@ func TestNewFixer(t *testing.T) {
 		"Source is a file": {
 			src: testSrcDir,
 			dst: testDstDir,
-			setup: func(fs afero.Fs, src, dst string) error {
+			setup: func(fs afero.Fs, src, _ string) error {
 				_, err := fs.Create(src)
 				return err
 			},

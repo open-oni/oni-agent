@@ -49,7 +49,7 @@ type errorReader struct {
 	err error
 }
 
-func (er *errorReader) Read(p []byte) (n int, err error) {
+func (er *errorReader) Read([]byte) (n int, err error) {
 	return 0, er.err
 }
 
@@ -235,7 +235,7 @@ func TestSession_LoadTitleCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set time func for consistent logging
 			var baseTime = time.Date(2024, 9, 25, 0, 0, 0, 987654321, time.UTC)
-			var offset int64 = 0
+			var offset int64
 			logstream.SetCustomNowFunction(func() time.Time {
 				offset++
 				return baseTime.Add(time.Second * time.Duration(offset))

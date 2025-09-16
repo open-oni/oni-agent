@@ -46,7 +46,10 @@ func TestJobLifecycle(t *testing.T) {
 	}
 
 	// Run the job to test the command's environment
-	j.Run(context.Background())
+	var err = j.Run(context.Background())
+	if err != nil {
+		t.Errorf("Unable to run job: %s", err)
+	}
 	var hasVirtualEnv, hasPath bool
 	for _, env := range j.runner.(*oniRunner).cmd.Env {
 		var parts = strings.Split(env, "=")

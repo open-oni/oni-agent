@@ -68,7 +68,9 @@ func (s session) respond(st Status, msg string, data H) {
 		return
 	}
 
-	s.io.Write(b)
+	// An error here *should* just mean the client closed the connection, so we
+	// deliberately ignore it.
+	_, _ = s.io.Write(b)
 	s.close()
 }
 

@@ -35,7 +35,7 @@ type IssueXML struct {
 // String gives us a value for testing equality. We ignore edition for
 // simplicity here, so this isn't the same as an NCA issue key.
 func (i *IssueXML) String() string {
-	return i.LCCN+"/"+i.IssueDate
+	return i.LCCN + "/" + i.IssueDate
 }
 
 type reelXML struct {
@@ -79,6 +79,8 @@ func ParseBatch(fs afero.Fs, pth string, skipKeys []string) (*BatchXML, error) {
 	return b, nil
 }
 
+// WriteBatchXML converts the batch structure into XML on the filesystem fs at
+// the given path
 func (b *BatchXML) WriteBatchXML(fs afero.Fs, pth string) error {
 	var dir, _ = filepath.Split(pth)
 	var err = fs.MkdirAll(dir, 0755)
@@ -118,7 +120,7 @@ func (b *BatchXML) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		Issues []*IssueXML `xml:"issue"`
 		Reels  []*reelXML  `xml:"reel"`
 	}{
-		Reels:  b.Reels,
+		Reels: b.Reels,
 	}
 	for _, i := range b.Issues {
 		if i.Skip {

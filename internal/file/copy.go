@@ -14,7 +14,7 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 	// Allow for the possibility of src and dest being the same file, in which
 	// case our job is already done
 	if src == dest {
-		return
+		return nil
 	}
 
 	var in, out afero.File
@@ -34,7 +34,6 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 		var xerr = out.Close()
 		if xerr != nil && err == nil {
 			err = fmt.Errorf("unable to close %q: %s", dest, xerr)
-			return
 		}
 	}()
 
@@ -48,7 +47,7 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 		return fmt.Errorf("unable to sync %q: %s", dest, err)
 	}
 
-	return
+	return err
 }
 
 // Copy copies a file on a custom afero filesystem, and retries up to maxRetry
