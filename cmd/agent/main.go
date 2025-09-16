@@ -188,7 +188,7 @@ func main() {
 	trapIntTerm(func() {
 		cancel()
 		srv.Close()
-		dbPool.Close()
+		_ = dbPool.Close()
 	})
 	go JobRunner.Wait(ctx)
 

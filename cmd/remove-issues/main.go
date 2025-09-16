@@ -11,7 +11,7 @@ import (
 
 var appName string
 
-func printUsage(msg string, args ...interface{}) {
+func printUsage(msg string, args ...any) {
 	var fmsg = fmt.Sprintf(msg, args...)
 	fmt.Printf("\033[91;1mERROR:\033[97m %s\033[m\n", fmsg)
 	fmt.Printf(`
@@ -94,5 +94,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Printf("INFO: All files processed.")
+	log.Print("INFO: All files processed.")
 }
