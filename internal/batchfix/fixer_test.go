@@ -284,7 +284,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 	// tests are acceptable, but slow enough that we're still testing the retry
 	// as a side effect of the failure-mid-copy test below.
 	var origDelay = file.CopyRetryDelay
-	file.CopyRetryDelay = time.Millisecond*100
+	file.CopyRetryDelay = time.Millisecond * 100
 	defer func() { file.CopyRetryDelay = origDelay }()
 
 	var tests = map[string]struct {
