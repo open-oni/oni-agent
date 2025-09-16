@@ -130,9 +130,11 @@ func (s session) handle() {
 		s.purgeBatch(args[0])
 
 	case "batch-patch":
-		// TODO: get batch name (and new version name) from caller so there isn't
-		// weird batchpatch logic for batch name, guesswork for rename, etc.
-		s.batchPatch()
+		if len(args) != 2 {
+			s.respond(StatusError, fmt.Sprintf("%q requires exactly two args: current batch name and new version's name", command), nil)
+			return
+		}
+		s.batchPatch(args[0], args[1])
 
 	case "ensure-awardee":
 		if len(args) < 1 || len(args) > 2 {
@@ -245,7 +247,7 @@ func (s session) purgeBatch(name string) {
 	s.queueONIJob("Purge batch", "purge_batch", []string{name})
 }
 
-func (s session) batchPatch() {
+func (s session) batchPatch(src, dest string) {
 	var input, err = s.readAll()
 	if err != nil {
 		slog.Error("Unable to read from client", "error", err)
@@ -266,17 +268,15 @@ func (s session) batchPatch() {
 	// doesn't exist by the time the job runs, we'll error out then, but this at
 	// least gives more immediate feedback.
 	var exists bool
-	exists, err = checkBatch(bp.BatchName())
+	exists, err = checkBatch(src)
 	if err == nil && !exists {
 		err = errors.New("batch does not exist")
 	}
 	if err != nil {
-		s.respond(StatusError, fmt.Sprintf("%q cannot be modified", bp.BatchName()), H{"error": err.Error()})
+		s.respond(StatusError, fmt.Sprintf("%q cannot be modified", src), H{"error": err.Error()})
 		return
 	}
 
-	var src = bp.BatchName()
-	var dest = src + "_fixed"
 	var j = JobRunner.NewBatchPatchJob(afero.NewBasePathFs(afero.NewOsFs(), BatchSource), src, dest, bp)
 	JobRunner.Push(j)
 

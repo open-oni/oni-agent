@@ -28,7 +28,6 @@ type instruction struct {
 // A BatchPatch is a series of instructions to apply to a batch as a single
 // atomic change
 type BatchPatch struct {
-	batchName    string
 	instructions []*instruction
 }
 
@@ -43,11 +42,6 @@ func FromStream(r io.Reader) (*BatchPatch, error) {
 		lineNum++
 		var line = strings.TrimSpace(scanner.Text())
 		if line == "" {
-			continue
-		}
-
-		if bp.batchName == "" {
-			bp.batchName = strings.TrimSpace(scanner.Text())
 			continue
 		}
 
@@ -70,11 +64,6 @@ func FromStream(r io.Reader) (*BatchPatch, error) {
 	}
 
 	return bp, nil
-}
-
-// BatchName returns the name of the batch to which this BatchPatch will apply
-func (bp *BatchPatch) BatchName() string {
-	return bp.batchName
 }
 
 // Instructions yields one operation/operand pair per iteration. Operation is
