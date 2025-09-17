@@ -19,6 +19,11 @@ const pathSeparator = string(os.PathSeparator)
 //
 // Currently Fixer's only fix is removing issues, which means not copying any
 // files that match a list of directories to skip.
+//
+// TODO: rewrite this so it takes a batch patch instead of the currently
+// very-hard-coded file walker that is built strictly for removing issues.
+// There's currently no way to mix operations; we'd have to run different types
+// of operations in different functions, making a new batch each time.
 type Fixer struct {
 	fs       afero.Fs
 	src      string
