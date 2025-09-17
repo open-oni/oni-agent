@@ -1,6 +1,7 @@
-package main
+package queue
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-oni/oni-agent/internal/batchfix"
+	"github.com/open-oni/oni-agent/internal/batchpatch"
 	"github.com/spf13/afero"
 )
 
@@ -138,20 +140,32 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// doRemove runs the remove operation with the given list of issue keys,
-// returning a temp filesystem (layered on top of tfs so we can reuse tfs
-// without re-extracting files) and any errors from the run operation.
+// doRun runs a batch patch runner with the given list of issue keys, returning
+// a temp filesystem (layered on top of TestFS so we can reuse it without
+// re-extracting files) and any errors from the run operation.
 //
 // The corrected batch is written out to "/fixed" on the returned FS.
-func doRemove(keys []string) (afero.Fs, error) {
+func doRun(keys []string) (afero.Fs, error) {
 	var rwfs = afero.NewCopyOnWriteFs(TestFS, afero.NewMemMapFs())
-	var args = append([]string{"remove-issues (test)", "/batch", "/fixed"}, keys...)
-	var err = run(rwfs, args...)
+	var instructions []string
+	for _, key := range keys {
+		instructions = append(instructions, "RemoveIssue "+key)
+	}
+	var bp, err = batchpatch.FromStream(strings.NewReader(strings.Join(instructions, "\n")))
+	if err != nil {
+		return nil, fmt.Errorf("creating batch patch from stream: %w", err)
+	}
+	var r = newBatchPatchRunner(rwfs, "/batch", "/fixed", bp)
 
-	return rwfs, err
+	err = r.Start(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("starting runner: %w", err)
+	}
+
+	return rwfs, r.Wait()
 }
 
-func TestRemoveIssuesCommand(t *testing.T) {
+func TestBatchPatchRunner(t *testing.T) {
 	var removeIssues = []*batchfix.IssueXML{
 		{LCCN: "sn84022658", IssueDate: "1856-01-05"},
 		{LCCN: "sn84022658", IssueDate: "1856-11-29"},
@@ -162,7 +176,7 @@ func TestRemoveIssuesCommand(t *testing.T) {
 		removeKeys[i] = issue.String() + "_01"
 	}
 
-	var fs, err = doRemove(removeKeys)
+	var fs, err = doRun(removeKeys)
 	if err != nil {
 		t.Fatalf("Valid call should not have an error, but got %q", err)
 	}
@@ -247,8 +261,8 @@ func TestRemoveIssuesCommand(t *testing.T) {
 	}
 }
 
-func TestRemoveIssues_InvalidIssueKeys(t *testing.T) {
-	var _, err = doRemove([]string{"fakeyfake/1920-01-01_01"})
+func TestInvalidIssueKeys(t *testing.T) {
+	var _, err = doRun([]string{"fakeyfake/1920-01-01_01"})
 	if err == nil {
 		t.Fatalf("Nonexistent issue keys should have failed in run(), but didn't")
 	}
