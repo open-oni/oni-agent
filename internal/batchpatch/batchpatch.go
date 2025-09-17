@@ -31,6 +31,18 @@ type BP struct {
 	instructions []*instruction
 }
 
+func (bp *BP) String() string {
+	if bp == nil {
+		return ""
+	}
+	var lines []string
+	for operation, operand := range bp.Instructions() {
+		lines = append(lines, fmt.Sprintf("<%s>: %q", operation, operand))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // FromStream converts newline-delimited instructions into a structure suitable
 // for correcting a batch
 func FromStream(r io.Reader) (*BP, error) {
