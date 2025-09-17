@@ -19,7 +19,7 @@ type batchPatchRunner struct {
 	fs      afero.Fs
 	src     string
 	dest    string
-	bp      *batchpatch.BatchPatch
+	bp      *batchpatch.BP
 	running atomic.Bool
 	err     error
 }
@@ -27,7 +27,7 @@ type batchPatchRunner struct {
 // newBatchPatchRunner returns a runner for modifying a batch, creating a new
 // one with an incremented version, then doing a purge and ingest to replace
 // the old with the new.
-func newBatchPatchRunner(fs afero.Fs, src, dest string, bp *batchpatch.BatchPatch) *batchPatchRunner {
+func newBatchPatchRunner(fs afero.Fs, src, dest string, bp *batchpatch.BP) *batchPatchRunner {
 	return &batchPatchRunner{fs: fs, src: src, dest: dest, bp: bp}
 }
 

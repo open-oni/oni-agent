@@ -256,7 +256,7 @@ func (s session) batchPatch(src, dest string) {
 	}
 
 	// Parse the data into a batch-patch structure so we know it's valid
-	var bp *batchpatch.BatchPatch
+	var bp *batchpatch.BP
 	bp, err = batchpatch.FromStream(bytes.NewBuffer(input))
 	if err != nil {
 		slog.Error("Invalid data for batch-patch command", "error", err)

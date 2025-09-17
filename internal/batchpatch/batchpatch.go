@@ -25,16 +25,16 @@ type instruction struct {
 	operand   string
 }
 
-// A BatchPatch is a series of instructions to apply to a batch as a single
-// atomic change
-type BatchPatch struct {
+// BP is currently just a series of instructions to apply to a batch as a
+// single atomic change
+type BP struct {
 	instructions []*instruction
 }
 
 // FromStream converts newline-delimited instructions into a structure suitable
 // for correcting a batch
-func FromStream(r io.Reader) (*BatchPatch, error) {
-	var bp = &BatchPatch{}
+func FromStream(r io.Reader) (*BP, error) {
+	var bp = &BP{}
 	var scanner = bufio.NewScanner(r)
 
 	var lineNum = 0
@@ -69,7 +69,7 @@ func FromStream(r io.Reader) (*BatchPatch, error) {
 // Instructions yields one operation/operand pair per iteration. Operation is
 // what a patch instruction does (e.g., "remove") while operand is what it
 // affects (e.g., an issue key).
-func (bp *BatchPatch) Instructions() iter.Seq2[Operation, string] {
+func (bp *BP) Instructions() iter.Seq2[Operation, string] {
 	return func(yield func(operation Operation, operand string) bool) {
 		for _, i := range bp.instructions {
 			if !yield(i.operation, i.operand) {
