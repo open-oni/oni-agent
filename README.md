@@ -156,6 +156,15 @@ The following commands are currently available:
 - `purge-batch <batch name>`: Purges the named batch. The return includes a job
   ID for monitoring its status. If the ID is -1 it means there's no task to
   perform, most likely the batch doesn't exist, so there's nothing to purge.
+- `batch-patch <original batch name> <new batch name>`: Takes one or more
+  instructions from STDIN. The original batch is read and the instructions are
+  carried out in a copy of that batch, `new batch name`. supported
+  instructions:
+  - `RemoveIssue <issue key>`: the copied batch will not have the issue
+    identified by the given key. Issue keys are in the format
+    `lccn/yyyymmddee`: lccn is the Library of Congress control number, `yyyy`
+    is a four-digit year, `mm` is a two-digit month, `dd` is a two-digit day of
+    the month, and `ee` is a two-digit edition for the issue (usually `01`).
 - `ensure-awardee <MARC Org Code> <Full awardee name>`: Checks if the given
   code exists in the `core_awardee` table. If it does, success is returned. If
   it doesn't, and full awardee name was given, the awardee is created and
