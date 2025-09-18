@@ -7,6 +7,9 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/open-oni/oni-agent/internal/batchpatch"
+	"github.com/spf13/afero"
 )
 
 // Queue holds the list of ONI jobs we need to run
@@ -59,6 +62,11 @@ func (q *Queue) NewONIJob(name string, args []string) *Job {
 // in the raw MARC xml passed in
 func (q *Queue) NewLoadTitleJob(xml []byte) *Job {
 	return q.newJob("load title", newLoadTitleRunner(xml))
+}
+
+// NewBatchPatchJob returns a batch modification job
+func (q *Queue) NewBatchPatchJob(fs afero.Fs, src, dest string, bp *batchpatch.BP) *Job {
+	return q.newJob("batch patch", newBatchPatchRunner(fs, src, dest, bp))
 }
 
 // GetJob returns a job by its id

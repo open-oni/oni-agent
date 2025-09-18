@@ -50,6 +50,9 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 	return err
 }
 
+// CopyRetryDelay is the time to wait between retrying a failed copy
+var CopyRetryDelay = time.Second
+
 // Copy copies a file on a custom afero filesystem, and retries up to maxRetry
 // times to allow for cases where network storage issues are temporarily giving
 // us problems. Each failure will just wait one second until it tries again,
@@ -59,7 +62,7 @@ func doCopy(fs afero.Fs, src, dest string) (err error) {
 func Copy(fs afero.Fs, src, dest string, maxRetry int) (err error) {
 	for n := 0; n < maxRetry; n++ {
 		if n > 0 {
-			time.Sleep(time.Second)
+			time.Sleep(CopyRetryDelay)
 		}
 		err = doCopy(fs, src, dest)
 		if err == nil {

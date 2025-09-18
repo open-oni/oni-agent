@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/afero"
+
+	"github.com/open-oni/oni-agent/internal/file"
 )
 
 const (
@@ -259,16 +262,42 @@ func TestFixer_readSourceBatch(t *testing.T) {
 	}
 }
 
+// midWriteFailFs is a filesystem wrapper that can be configured to fail on
+// writes after a certain number of files have been created. This lets us test
+// cleanup logic for failures that happen mid-copy.
+type midWriteFailFs struct {
+	afero.Fs
+	createCount int
+	failAfter   int
+}
+
+func (fs *midWriteFailFs) Create(name string) (afero.File, error) {
+	fs.createCount++
+	if fs.failAfter > 0 && fs.createCount > fs.failAfter {
+		return nil, fmt.Errorf("injected error after %d creates", fs.failAfter)
+	}
+	return fs.Fs.Create(name)
+}
+
 func TestFixer_RemoveIssues(t *testing.T) {
+	// Make the file copy failures faster for testing. This is fast enough that
+	// tests are acceptable, but slow enough that we're still testing the retry
+	// as a side effect of the failure-mid-copy test below.
+	var origDelay = file.CopyRetryDelay
+	file.CopyRetryDelay = time.Millisecond * 100
+	defer func() { file.CopyRetryDelay = origDelay }()
+
 	var tests = map[string]struct {
 		skipKeys            []string
 		wantErr             bool
+		fs                  afero.Fs
 		expectedDstFiles    []string
 		expectedBatchIssues int
 	}{
 		"Remove one issue": {
 			skipKeys: []string{"sn12345678/1900-01-01_01"},
 			wantErr:  false,
+			fs:       afero.NewMemMapFs(),
 			expectedDstFiles: []string{
 				"/data/batch.xml",
 				"/data/sn12345678/print/1900010201/001.jp2",
@@ -285,6 +314,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 		"Remove multiple issues": {
 			skipKeys: []string{"sn12345678/1900-01-01_01", "sn98765432/1950-05-05_01"},
 			wantErr:  false,
+			fs:       afero.NewMemMapFs(),
 			expectedDstFiles: []string{
 				"/data/batch.xml",
 				"/data/sn12345678/print/1900010201/001.jp2",
@@ -299,6 +329,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 		"Remove no issues": {
 			skipKeys: []string{},
 			wantErr:  false,
+			fs:       afero.NewMemMapFs(),
 			expectedDstFiles: []string{
 				"/data/batch.xml",
 				"/data/sn12345678/print/1900010101/001.jp2",
@@ -321,6 +352,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 		"Remove all issues": {
 			skipKeys: []string{"sn12345678/1900-01-01_01", "sn12345678/1900-01-02_01", "sn98765432/1950-05-05_01"},
 			wantErr:  false,
+			fs:       afero.NewMemMapFs(),
 			expectedDstFiles: []string{
 				"/data/batch.xml",
 			},
@@ -329,6 +361,14 @@ func TestFixer_RemoveIssues(t *testing.T) {
 		"Invalid issue key": {
 			skipKeys:            []string{"fakeyfake/1920-01-01_01"},
 			wantErr:             true,
+			fs:                  afero.NewMemMapFs(),
+			expectedDstFiles:    []string{},
+			expectedBatchIssues: 0,
+		},
+		"Error during file copy": {
+			skipKeys:            []string{},
+			wantErr:             true,
+			fs:                  &midWriteFailFs{Fs: afero.NewMemMapFs(), failAfter: 5},
 			expectedDstFiles:    []string{},
 			expectedBatchIssues: 0,
 		},
@@ -336,13 +376,12 @@ func TestFixer_RemoveIssues(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			var fs = afero.NewMemMapFs()
-			var err = createTestBatch(fs, testSrcDir)
+			var err = createTestBatch(tt.fs, testSrcDir)
 			if err != nil {
 				t.Fatalf("Failed to create test batch: %s", err)
 			}
 
-			fixer, err := NewFixer(fs, testSrcDir, testDstDir)
+			fixer, err := NewFixer(tt.fs, testSrcDir, testDstDir)
 			if err != nil {
 				t.Fatalf("Error calling NewFixer: %s", err)
 			}
@@ -350,7 +389,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 
 			var dstFiles []string
 			if err == nil {
-				dstFiles, err = findAll(fs, testDstDir)
+				dstFiles, err = findAll(tt.fs, testDstDir)
 				if err != nil {
 					t.Fatalf("Error calling findAll: %s", err)
 				}
@@ -369,6 +408,15 @@ func TestFixer_RemoveIssues(t *testing.T) {
 				if len(dstFiles) > 0 {
 					t.Errorf("Expected no files in destination on error, but found: %v", dstFiles)
 				}
+
+				// Make sure there's no temp dir, either
+				var dir, base = filepath.Split(testDstDir)
+				var tmpDst = filepath.Join(dir, "WIP-UNREADY-"+base)
+				var _, e = tt.fs.Stat(tmpDst)
+				if !os.IsNotExist(e) {
+					t.Errorf("Expected temp dir %q to be removed, but it exists", tmpDst)
+				}
+
 				return
 			}
 
@@ -385,7 +433,7 @@ func TestFixer_RemoveIssues(t *testing.T) {
 			// Verify batch.xml content in destination
 			var dstBatchXMLPath = filepath.Join(testDstDir, "data", "batch.xml")
 			var data []byte
-			data, err = afero.ReadFile(fs, dstBatchXMLPath)
+			data, err = afero.ReadFile(tt.fs, dstBatchXMLPath)
 			if err != nil {
 				t.Fatalf("Failed to read destination batch.xml: %v", err)
 			}

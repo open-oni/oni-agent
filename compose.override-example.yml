@@ -1,0 +1,15 @@
+# Example override for exposing ONI and the Agent to the host, and using local data for batches
+services:
+  web:
+    volumes:
+      - ./data/batches:/mnt/batches
+    ports:
+      - 8080:80
+  agent:
+    volumes:
+      - ./data/batches:/mnt/batches
+    ports:
+      - 2222:22
+  rais:
+    volumes:
+      - ./data/batches:/mnt/batches
