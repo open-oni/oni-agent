@@ -40,15 +40,7 @@ type Fixer struct {
 // 2: need to have a post-failure cleanup somehow. Maybe that's the caller's
 // responsibility?
 func NewFixer(filesystem afero.Fs, source, destination string) (f *Fixer, err error) {
-	f = &Fixer{fs: filesystem}
-	f.src, err = filepath.Abs(source)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path from source %q: %w", source, err)
-	}
-	f.dst, err = filepath.Abs(destination)
-	if err != nil {
-		return nil, fmt.Errorf("getting absolute path from destination %q: %w", destination, err)
-	}
+	f = &Fixer{fs: filesystem, src: filepath.Clean(source), dst: filepath.Clean(destination)}
 
 	var dir, base = filepath.Split(f.dst)
 	f.tmpDst = filepath.Join(dir, "WIP-UNREADY-"+base)
