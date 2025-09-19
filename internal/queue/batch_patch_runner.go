@@ -22,6 +22,8 @@ type batchPatchRunner struct {
 	dest    string
 	bp      *batchpatch.BP
 	running atomic.Bool
+	stdout  logstream.Stream
+	stderr  logstream.Stream
 	err     error
 }
 
@@ -39,11 +41,26 @@ func (r *batchPatchRunner) Start(ctx context.Context) error {
 	return nil
 }
 
-func (r *batchPatchRunner) run(_ context.Context) {
+// runSub executes a single ONI command and merges logs into its "parent" (r)
+func (r *batchPatchRunner) runSub(ctx context.Context, args ...string) error {
+	var sub = newONIRunner(args)
+	var err = sub.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("starting ONI sub-job for %q: %w", args, err)
+	}
+
+	err = sub.Wait()
+	r.stdout = r.stdout.Merge(sub.Stdout())
+	r.stderr = r.stderr.Merge(sub.Stderr())
+
+	return err
+}
+
+func (r *batchPatchRunner) run(ctx context.Context) {
 	defer r.running.Store(false)
 
 	var l = slog.With("source", "batchPatchRunner", "src", r.src, "dest", r.dest)
-	l.Info("Beginning batch runner")
+	l.Info("Runner starting...")
 	var f, err = batchfix.NewFixer(r.fs, r.src, r.dest)
 	if err != nil {
 		l.Error("Unable to create batch fixer", "error", err)
@@ -64,9 +81,31 @@ func (r *batchPatchRunner) run(_ context.Context) {
 		return
 	}
 
-	l.Info("Success: queueing up purge and reload job")
-	var j = r.q.NewPurgeAndLoadJob(r.src, r.dest)
-	r.q.Push(j)
+	// Step 1: purge the original batch
+	l.Info("Patch succeeded: purging original batch")
+	err = r.runSub(ctx, "purge_batch", r.src)
+	if err != nil {
+		r.err = fmt.Errorf("purging original batch %q: %w", r.src, err)
+		return
+	}
+
+	// Step 2: load the new batch: if there's no error we can exit here
+	l.Info("Purge complete: loading new batch")
+	err = r.runSub(ctx, "load_batch", r.dest)
+	if err == nil {
+		return
+	}
+
+	// Step 3: load failed: roll back and pray to the digital gods
+	l.Error("Failed loading new batch. Reingesting original.", "error", err)
+	var err2 = r.runSub(ctx, "load_batch", r.src)
+	if err2 != nil {
+		l.Error("ROLLBACK FAILED. Manual intervention required!", "load error", err, "rollback error", err2)
+		r.err = fmt.Errorf("loading new batch %q: %w; rolling back to original batch %q: %w", r.dest, err, r.src, err2)
+		return
+	}
+
+	r.err = fmt.Errorf("loading new batch %q: %w", r.dest, err)
 }
 
 // Wait waits for the batch patch to complete
@@ -78,14 +117,12 @@ func (r *batchPatchRunner) Wait() error {
 	return r.err
 }
 
-// Stdout is required for the internal "runner" interface, but always returns
-// an empty log stream
+// Returns a combined STDOUT log for the load and purge operations
 func (r *batchPatchRunner) Stdout() logstream.Stream {
-	return logstream.Stream{}
+	return r.stdout
 }
 
-// Stderr is required for the internal "runner" interface, but always returns
-// an empty log stream
+// Returns a combined STDERR log for the load and purge operations
 func (r *batchPatchRunner) Stderr() logstream.Stream {
-	return logstream.Stream{}
+	return r.stderr
 }

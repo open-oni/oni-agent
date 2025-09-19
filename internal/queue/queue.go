@@ -69,11 +69,6 @@ func (q *Queue) NewBatchPatchJob(fs afero.Fs, src, dest string, bp *batchpatch.B
 	return q.newJob("batch patch", newBatchPatchRunner(q, fs, src, dest, bp))
 }
 
-// NewPurgeAndLoadJob returns a job that purges an old batch and loads a new one
-func (q *Queue) NewPurgeAndLoadJob(originalBatchPath, newBatchPath string) *Job {
-	return q.newJob("purge and load", newPurgeAndLoadRunner(originalBatchPath, newBatchPath))
-}
-
 // GetJob returns a job by its id
 func (q *Queue) GetJob(id int64) *Job {
 	q.m.RLock()
