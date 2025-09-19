@@ -16,10 +16,12 @@ import (
 // batchPatchRunner removes one or more issues from a batch by creating a new
 // batch with the issues removed
 type batchPatchRunner struct {
+	q       *Queue
 	fs      afero.Fs
 	src     string
 	dest    string
 	bp      *batchpatch.BP
+	pal     bool
 	running atomic.Bool
 	err     error
 }
@@ -27,8 +29,8 @@ type batchPatchRunner struct {
 // newBatchPatchRunner returns a runner for modifying a batch, creating a new
 // one with an incremented version, then doing a purge and ingest to replace
 // the old with the new.
-func newBatchPatchRunner(fs afero.Fs, src, dest string, bp *batchpatch.BP) *batchPatchRunner {
-	return &batchPatchRunner{fs: fs, src: src, dest: dest, bp: bp}
+func newBatchPatchRunner(q *Queue, fs afero.Fs, src, dest string, bp *batchpatch.BP, pal bool) *batchPatchRunner {
+	return &batchPatchRunner{q: q, fs: fs, src: src, dest: dest, bp: bp, pal: pal}
 }
 
 // Start sets up all the data and kicks off the batch patch
@@ -59,6 +61,11 @@ func (r *batchPatchRunner) run(_ context.Context) {
 		slog.Error("Unable to remove issues", "error", err)
 		r.err = fmt.Errorf("removing issues: %w", err)
 		return
+	}
+
+	if r.pal {
+		var j = r.q.NewPurgeAndLoadJob(r.src, r.dest)
+		r.q.Push(j)
 	}
 }
 

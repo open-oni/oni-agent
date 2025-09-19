@@ -8,7 +8,8 @@ import (
 	"github.com/open-oni/oni-agent/internal/venv"
 )
 
-// oniRunner is responsible for running `manage.py` commands against ONI
+// oniRunner is responsible for running single `manage.py` commands against
+// ONI, when there's no need for complex processing / parsing / etc.
 type oniRunner struct {
 	cmd    *exec.Cmd
 	args   []string

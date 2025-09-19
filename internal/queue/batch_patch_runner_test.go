@@ -145,7 +145,7 @@ func TestMain(m *testing.M) {
 // re-extracting files) and any errors from the run operation.
 //
 // The corrected batch is written out to "/fixed" on the returned FS.
-func doRun(keys []string) (afero.Fs, error) {
+func doRun(keys []string, pal bool) (afero.Fs, error) {
 	var rwfs = afero.NewCopyOnWriteFs(TestFS, afero.NewMemMapFs())
 	var instructions []string
 	for _, key := range keys {
@@ -155,7 +155,8 @@ func doRun(keys []string) (afero.Fs, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating batch patch from stream: %w", err)
 	}
-	var r = newBatchPatchRunner(rwfs, "/batch", "/fixed", bp)
+	var q = New()
+	var r = newBatchPatchRunner(q, rwfs, "/batch", "/fixed", bp, pal)
 
 	err = r.Start(context.Background())
 	if err != nil {
@@ -176,7 +177,7 @@ func TestBatchPatchRunner(t *testing.T) {
 		removeKeys[i] = issue.String() + "_01"
 	}
 
-	var fs, err = doRun(removeKeys)
+	var fs, err = doRun(removeKeys, false)
 	if err != nil {
 		t.Fatalf("Valid call should not have an error, but got %q", err)
 	}
@@ -262,7 +263,7 @@ func TestBatchPatchRunner(t *testing.T) {
 }
 
 func TestInvalidIssueKeys(t *testing.T) {
-	var _, err = doRun([]string{"fakeyfake/1920-01-01_01"})
+	var _, err = doRun([]string{"fakeyfake/1920-01-01_01"}, false)
 	if err == nil {
 		t.Fatalf("Nonexistent issue keys should have failed in run(), but didn't")
 	}

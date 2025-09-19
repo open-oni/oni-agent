@@ -65,8 +65,13 @@ func (q *Queue) NewLoadTitleJob(xml []byte) *Job {
 }
 
 // NewBatchPatchJob returns a batch modification job
-func (q *Queue) NewBatchPatchJob(fs afero.Fs, src, dest string, bp *batchpatch.BP) *Job {
-	return q.newJob("batch patch", newBatchPatchRunner(fs, src, dest, bp))
+func (q *Queue) NewBatchPatchJob(fs afero.Fs, src, dest string, bp *batchpatch.BP, pal bool) *Job {
+	return q.newJob("batch patch", newBatchPatchRunner(q, fs, src, dest, bp, pal))
+}
+
+// NewPurgeAndLoadJob returns a job that purges an old batch and loads a new one
+func (q *Queue) NewPurgeAndLoadJob(originalBatchPath, newBatchPath string) *Job {
+	return q.newJob("purge and load", newPurgeAndLoadRunner(originalBatchPath, newBatchPath))
 }
 
 // GetJob returns a job by its id

@@ -81,3 +81,76 @@ func TestWrite(t *testing.T) {
 		})
 	}
 }
+
+func TestMerge(t *testing.T) {
+	type tcase struct {
+		s1       *Stream
+		s2       *Stream
+		expected []string
+	}
+
+	var s1 = New()
+	timeNow = gettf(1)
+	s1.Write([]byte("s1 log 1\n"))
+	timeNow = gettf(2)
+	s1.Write([]byte("s1 log 2\n"))
+	timeNow = gettf(3)
+	s1.Write([]byte("s1 log 3 - unprocessed"))
+
+	var s2 = New()
+	timeNow = gettf(4)
+	s2.Write([]byte("s2 log 1\n"))
+	timeNow = gettf(5)
+	s2.Write([]byte("s2 log 2\n"))
+	timeNow = gettf(6)
+	s2.Write([]byte("s2 log 3 - unprocessed"))
+
+	var s3 = New()
+	timeNow = gettf(10)
+	s3.Write([]byte("s3 log 1\n"))
+
+	var tests = map[string]tcase{
+		"Simple merge": {
+			s1: s1,
+			s2: s2,
+			expected: []string{
+				"[2024-09-25T00:00:01.987654321Z] s1 log 1",
+				"[2024-09-25T00:00:02.987654321Z] s1 log 2",
+				"[2024-09-25T00:00:03.987654321Z] s1 log 3 - unprocessed",
+				"[2024-09-25T00:00:04.987654321Z] s2 log 1",
+				"[2024-09-25T00:00:05.987654321Z] s2 log 2",
+				"[2024-09-25T00:00:06.987654321Z] s2 log 3 - unprocessed",
+			},
+		},
+		"Merge into empty": {
+			s1: New(),
+			s2: s3,
+			expected: []string{
+				"[2024-09-25T00:00:10.987654321Z] s3 log 1",
+			},
+		},
+		"Merge with empty": {
+			s1: s3,
+			s2: New(),
+			expected: []string{
+				"[2024-09-25T00:00:10.987654321Z] s3 log 1",
+			},
+		},
+		"Merge empty streams": {
+			s1:       New(),
+			s2:       New(),
+			expected: nil,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			var merged = tc.s1.Merge(*tc.s2)
+			var got = merged.Timestamped()
+			var diff = cmp.Diff(got, tc.expected)
+			if diff != "" {
+				t.Fatalf(diff)
+			}
+		})
+	}
+}
