@@ -1,4 +1,4 @@
-name: nca
+name: agent
 
 services:
   rdbms:
