@@ -21,7 +21,6 @@ type batchPatchRunner struct {
 	src     string
 	dest    string
 	bp      *batchpatch.BP
-	pal     bool
 	running atomic.Bool
 	err     error
 }
@@ -29,8 +28,8 @@ type batchPatchRunner struct {
 // newBatchPatchRunner returns a runner for modifying a batch, creating a new
 // one with an incremented version, then doing a purge and ingest to replace
 // the old with the new.
-func newBatchPatchRunner(q *Queue, fs afero.Fs, src, dest string, bp *batchpatch.BP, pal bool) *batchPatchRunner {
-	return &batchPatchRunner{q: q, fs: fs, src: src, dest: dest, bp: bp, pal: pal}
+func newBatchPatchRunner(q *Queue, fs afero.Fs, src, dest string, bp *batchpatch.BP) *batchPatchRunner {
+	return &batchPatchRunner{q: q, fs: fs, src: src, dest: dest, bp: bp}
 }
 
 // Start sets up all the data and kicks off the batch patch
@@ -63,10 +62,8 @@ func (r *batchPatchRunner) run(_ context.Context) {
 		return
 	}
 
-	if r.pal {
-		var j = r.q.NewPurgeAndLoadJob(r.src, r.dest)
-		r.q.Push(j)
-	}
+	var j = r.q.NewPurgeAndLoadJob(r.src, r.dest)
+	r.q.Push(j)
 }
 
 // Wait waits for the batch patch to complete

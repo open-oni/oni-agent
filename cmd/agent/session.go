@@ -130,12 +130,11 @@ func (s session) handle() {
 		s.purgeBatch(args[0])
 
 	case "batch-patch":
-		if len(args) < 2 {
-			s.respond(StatusError, fmt.Sprintf("%q requires at least two args: current batch name and new version's name", command), nil)
+		if len(args) != 2 {
+			s.respond(StatusError, fmt.Sprintf("usage: %s <current batch name> <new version's name>", command), nil)
 			return
 		}
-		var pal = len(args) > 2 && args[2] == "--purge-and-load"
-		s.batchPatch(args[0], args[1], pal)
+		s.batchPatch(args[0], args[1])
 
 	case "ensure-awardee":
 		if len(args) < 1 || len(args) > 2 {
@@ -248,7 +247,7 @@ func (s session) purgeBatch(name string) {
 	s.queueONIJob("Purge batch", "purge_batch", []string{name})
 }
 
-func (s session) batchPatch(src, dest string, pal bool) {
+func (s session) batchPatch(src, dest string) {
 	var input, err = s.readAll()
 	if err != nil {
 		slog.Error("Unable to read from client", "error", err)
@@ -278,7 +277,7 @@ func (s session) batchPatch(src, dest string, pal bool) {
 		return
 	}
 
-	var j = JobRunner.NewBatchPatchJob(afero.NewBasePathFs(afero.NewOsFs(), BatchSource), src, dest, bp, pal)
+	var j = JobRunner.NewBatchPatchJob(afero.NewBasePathFs(afero.NewOsFs(), BatchSource), src, dest, bp)
 	JobRunner.Push(j)
 
 	s.respond(StatusSuccess, "Job added to queue", H{"job": H{"id": j.ID()}})
