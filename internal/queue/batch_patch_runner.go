@@ -42,9 +42,11 @@ func (r *batchPatchRunner) Start(ctx context.Context) error {
 func (r *batchPatchRunner) run(_ context.Context) {
 	defer r.running.Store(false)
 
+	var l = slog.With("source", "batchPatchRunner", "src", r.src, "dest", r.dest)
+	l.Info("Beginning batch runner")
 	var f, err = batchfix.NewFixer(r.fs, r.src, r.dest)
 	if err != nil {
-		slog.Error("Unable to create batch fixer", "error", err)
+		l.Error("Unable to create batch fixer", "error", err)
 		r.err = fmt.Errorf("creating batch fixer: %w", err)
 		return
 	}
@@ -57,11 +59,12 @@ func (r *batchPatchRunner) run(_ context.Context) {
 	}
 	err = f.RemoveIssues(removeKeys)
 	if err != nil {
-		slog.Error("Unable to remove issues", "error", err)
+		l.Error("Unable to remove issues", "error", err)
 		r.err = fmt.Errorf("removing issues: %w", err)
 		return
 	}
 
+	l.Info("Success: queueing up purge and reload job")
 	var j = r.q.NewPurgeAndLoadJob(r.src, r.dest)
 	r.q.Push(j)
 }
