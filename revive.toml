@@ -117,5 +117,5 @@ enableAllRules = true
 [rule.unhandled-error]
   arguments =[
     "fmt\\.Print.*", "fmt\\.Fprint.*", "os\\.File\\.WriteString", "io\\.Closer\\.Close",
-    "encoding/csv\\.Writer\\.Write", "os\\.Remove", "math/rand\\.Read"
+    "encoding/csv\\.Writer\\.Write", "os\\.Remove", "math/rand\\.Read", "logstream\\.Stream\\.Write",
   ]
