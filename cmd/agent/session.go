@@ -131,7 +131,7 @@ func (s session) handle() {
 
 	case "batch-patch":
 		if len(args) != 2 {
-			s.respond(StatusError, fmt.Sprintf("%q requires exactly two args: current batch name and new version's name", command), nil)
+			s.respond(StatusError, fmt.Sprintf("usage: %s <current batch name> <new version's name>", command), nil)
 			return
 		}
 		s.batchPatch(args[0], args[1])

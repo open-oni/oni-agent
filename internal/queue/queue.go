@@ -66,7 +66,7 @@ func (q *Queue) NewLoadTitleJob(xml []byte) *Job {
 
 // NewBatchPatchJob returns a batch modification job
 func (q *Queue) NewBatchPatchJob(fs afero.Fs, src, dest string, bp *batchpatch.BP) *Job {
-	return q.newJob("batch patch", newBatchPatchRunner(fs, src, dest, bp))
+	return q.newJob("batch patch", newBatchPatchRunner(q, fs, src, dest, bp))
 }
 
 // GetJob returns a job by its id

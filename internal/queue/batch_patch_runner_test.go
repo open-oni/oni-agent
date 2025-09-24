@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-oni/oni-agent/internal/batchfix"
 	"github.com/open-oni/oni-agent/internal/batchpatch"
+	"github.com/open-oni/oni-agent/internal/venv"
 	"github.com/spf13/afero"
 )
 
@@ -155,7 +156,12 @@ func doRun(keys []string) (afero.Fs, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating batch patch from stream: %w", err)
 	}
-	var r = newBatchPatchRunner(rwfs, "/batch", "/fixed", bp)
+	var q = New()
+	var r = newBatchPatchRunner(q, rwfs, "/batch", "/fixed", bp)
+
+	// Activate our dummy manage.py
+	testdir = filepath.Join(wd, "testdata", "batch_patch_runner")
+	venv.Activate(testdir)
 
 	err = r.Start(context.Background())
 	if err != nil {

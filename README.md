@@ -158,8 +158,8 @@ The following commands are currently available:
   perform, most likely the batch doesn't exist, so there's nothing to purge.
 - `batch-patch <original batch name> <new batch name>`: Takes one or more
   instructions from STDIN. The original batch is read and the instructions are
-  carried out in a copy of that batch, `new batch name`. supported
-  instructions:
+  carried out in a copy of that batch, `new batch name`. The old batch is then
+  purged from ONI, and the new batch loaded. Supported instructions:
   - `RemoveIssue <issue key>`: the copied batch will not have the issue
     identified by the given key. Issue keys are in the format
     `lccn/yyyymmddee`: lccn is the Library of Congress control number, `yyyy`

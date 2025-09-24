@@ -49,6 +49,24 @@ func New() *Stream {
 	return &Stream{}
 }
 
+// Merge combines the logs from other into s and returns a new Stream. This
+// should usually be called when both streams are done receiving data.
+func (s *Stream) Merge(other Stream) Stream {
+	var out = New()
+
+	out.Logs = append(out.Logs, s.Logs...)
+	if s.unprocessed != "" {
+		out.Logs = append(out.Logs, Log{Timestamp: s.lastWrite, Value: s.unprocessed})
+	}
+
+	out.Logs = append(out.Logs, other.Logs...)
+	if other.unprocessed != "" {
+		out.Logs = append(out.Logs, Log{Timestamp: other.lastWrite, Value: other.unprocessed})
+	}
+
+	return *out
+}
+
 // Write implements io.Writer's Write method, splitting up the written data by
 // the OS line split character(s)
 func (s *Stream) Write(data []byte) (n int, err error) {
