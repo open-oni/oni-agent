@@ -19,7 +19,7 @@ func getQ(t *testing.T) *Queue {
 	if err != nil {
 		t.Fatalf("Unable to get working dir: %s", err)
 	}
-	testdir = filepath.Join(wd, "testdata")
+	testdir = filepath.Join(wd, "testdata", "queue")
 	venv.Activate(testdir)
 	return New()
 }
